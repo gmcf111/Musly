@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:lottie/lottie.dart';
-import 'package:dotlottie_loader/dotlottie_loader.dart';
 import 'dart:io';
 import 'package:window_manager/window_manager.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
@@ -123,9 +121,6 @@ class MuslyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localeService = Provider.of<LocaleService>(context);
-    debugPrint(
-      'MuslyApp: Rebuilding with locale: ${localeService.currentLocale?.languageCode}',
-    );
 
     return MaterialApp(
       title: 'Musly',
@@ -162,20 +157,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         return Scaffold(
           backgroundColor: Colors.black,
           body: Center(
-            child: DotLottieLoader.fromNetwork(
-              'https://lottie.host/6e9f4052-df21-4dc1-be37-88b062099640/TMV5YZRCbo.lottie',
-              frameBuilder: (BuildContext context, DotLottie? dotlottie) {
-                if (dotlottie != null) {
-                  return Lottie.memory(
-                    dotlottie.animations.values.single,
-                    width: 250,
-                    height: 250,
-                  );
-                } else {
-                  return const SizedBox.shrink();
-                }
-              },
-            ),
+    child: const CircularProgressIndicator(),
           ),
         );
       case AuthState.authenticated:
@@ -183,9 +165,76 @@ class _AuthWrapperState extends State<AuthWrapper> {
       case AuthState.offlineMode:
         // Show MainScreen but with a banner indicating offline mode
         return const MainScreen(isOfflineMode: true);
+      case AuthState.serverUnreachable:
+        return _ServerUnreachableScreen(
+          hasOfflineContent: authProvider.hasOfflineContent,
+          onEnterOfflineMode: () => authProvider.enterOfflineMode(),
+          onDisconnect: () => authProvider.disconnect(),
+        );
       case AuthState.unauthenticated:
       case AuthState.error:
         return const LoginScreen();
     }
+  }
+}
+
+class _ServerUnreachableScreen extends StatelessWidget {
+  final bool hasOfflineContent;
+  final VoidCallback onEnterOfflineMode;
+  final VoidCallback onDisconnect;
+
+  const _ServerUnreachableScreen({
+    required this.hasOfflineContent,
+    required this.onEnterOfflineMode,
+    required this.onDisconnect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_rounded, size: 72, color: Colors.grey),
+              const SizedBox(height: 24),
+              Text(
+                AppLocalizations.of(context)!.serverUnreachableTitle,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AppLocalizations.of(context)!.serverUnreachableSubtitle,
+                style: const TextStyle(color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              if (hasOfflineContent) ...[              
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onEnterOfflineMode,
+                    icon: const Icon(Icons.offline_pin_rounded),
+                    label: Text(AppLocalizations.of(context)!.openOfflineMode),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onDisconnect,
+                  icon: const Icon(Icons.logout_rounded),
+                  label: Text(AppLocalizations.of(context)!.disconnect),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

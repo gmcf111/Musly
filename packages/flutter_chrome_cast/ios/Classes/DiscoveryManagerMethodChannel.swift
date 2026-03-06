@@ -38,7 +38,16 @@ class FGCDiscoveryManagerMethodChannel : UIResponder, GCKDiscoveryManagerListene
     
     
     func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        
+        switch call.method {
+        case "startDiscovery":
+            discoveryManager.startDiscovery()
+            result(nil)
+        case "stopDiscovery":
+            discoveryManager.stopDiscovery()
+            result(nil)
+        default:
+            result(FlutterMethodNotImplemented)
+        }
     }
     
     

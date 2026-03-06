@@ -14,6 +14,7 @@ import '../models/lyrics.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../services/subsonic_service.dart';
+import '../services/offline_service.dart';
 import 'album_artwork.dart' show isLocalFilePath;
 
 class SyncedLyricsView extends StatefulWidget {
@@ -229,6 +230,14 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
     return buffer.toString();
   }
 
+  /// Syncs the lyric controller to the player's current position so that
+  /// opening lyrics mid-song immediately shows the correct line.
+  void _syncToCurrentPosition() {
+    if (_lyricController == null) return;
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    _lyricController!.setProgress(playerProvider.position);
+  }
+
   Future<void> _loadLyrics() async {
     setState(() {
       _isLoading = true;
@@ -241,13 +250,26 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
         listen: false,
       );
 
-      final syncedData = await subsonicService.getLyricsBySongId(_song.id);
+      // Check local lyrics cache first (available offline)
+      final offlineService = OfflineService();
+      final cached = await offlineService.getLocalLyrics(_song.id);
+      final syncedData = cached?['lyricsList'] as Map<String, dynamic>?
+          ?? await subsonicService.getLyricsBySongId(_song.id);
+
+      if (!mounted) return;
 
       if (syncedData != null) {
         final structuredLyrics = syncedData['structuredLyrics'];
         if (structuredLyrics is List && structuredLyrics.isNotEmpty) {
-          final lyrics = structuredLyrics.first;
-          final lines = lyrics['line'] as List?;
+          // Prefer the synced entry — unsynced entries have null start times
+          // that all default to 0, making every line appear at position 0.
+          final syncedEntry = structuredLyrics
+              .cast<Map<String, dynamic>>()
+              .firstWhere(
+                (l) => l['synced'] == true,
+                orElse: () => <String, dynamic>{},
+              );
+          final lines = syncedEntry['line'] as List?;
           if (lines != null && lines.isNotEmpty) {
             final parsedLines = lines
                 .map<LyricLine>((line) {
@@ -267,6 +289,9 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
               });
               _initializeLyricController();
               _lyricController!.loadLyric(_convertToLrc(_lyrics!));
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _syncToCurrentPosition();
+              });
               _fadeController.forward();
               return;
             }
@@ -274,7 +299,8 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
         }
       }
 
-      final plainData = await subsonicService.getLyrics(
+      final plainData = cached?['lyrics'] as Map<String, dynamic>?
+          ?? await subsonicService.getLyrics(
         artist: _song.artist,
         title: _song.title,
       );
@@ -289,6 +315,9 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
             });
             _initializeLyricController();
             _lyricController!.loadLyric(value);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _syncToCurrentPosition();
+            });
           } else {
             setState(() {
               _lyrics = SyncedLyrics.fromPlainText(value);
@@ -296,6 +325,9 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView>
             });
             _initializeLyricController();
             _lyricController!.loadLyric(_convertToLrc(_lyrics!));
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _syncToCurrentPosition();
+            });
           }
           _fadeController.forward();
           return;

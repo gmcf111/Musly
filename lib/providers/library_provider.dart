@@ -6,12 +6,14 @@ import '../models/models.dart';
 import '../services/services.dart';
 import '../services/android_auto_service.dart';
 import '../services/local_music_service.dart';
+import '../services/offline_service.dart';
 
 class LibraryProvider extends ChangeNotifier {
   final SubsonicService _subsonicService;
   final AndroidAutoService _androidAutoService = AndroidAutoService();
 
   bool _localOnlyMode = false;
+  bool _serverOfflineMode = false;
   LocalMusicService? _localMusicService;
 
   List<Artist> _artists = [];
@@ -90,6 +92,11 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   bool get isLocalOnlyMode => _localOnlyMode;
+  bool get isServerOfflineMode => _serverOfflineMode;
+
+  void setServerOfflineMode(bool offline) {
+    _serverOfflineMode = offline;
+  }
 
   String getCoverArtUrl(String? coverArt) {
     return _subsonicService.getCoverArtUrl(coverArt, size: 300);
@@ -149,27 +156,44 @@ class LibraryProvider extends ChangeNotifier {
 
       // Push whatever we already have cached so Android Auto shows content
       // immediately, even before server calls complete (or if they fail).
-      _pushLibraryToAndroidAuto();
+      // In server-offline mode, filter to only downloaded (playable) songs.
+      if (_serverOfflineMode) {
+        await _pushOfflineLibraryToAndroidAuto();
+      } else {
+        _pushLibraryToAndroidAuto();
+      }
+      // Re-push after a short delay to handle the MusicService startup race:
+      // the service is started asynchronously and getInstance() may be null
+      // when the first push above happens, causing data to be silently dropped.
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (_serverOfflineMode) {
+          _pushOfflineLibraryToAndroidAuto();
+        } else {
+          _pushLibraryToAndroidAuto();
+        }
+      });
 
-      try {
-        await Future.wait([
-          loadRecentAlbums(),
-          loadRandomSongs(),
-          loadPlaylists(),
-          loadArtists(),
-        ]).timeout(
-          const Duration(seconds: 5),
-          onTimeout: () {
-            debugPrint(
-              'Server initialization timed out - continuing in local mode',
-            );
-            throw TimeoutException('Server not responding');
-          },
-        );
-      } catch (serverError) {
-        // Server not configured or error - that's ok for local mode.
-        // Android Auto already has cached data from the push above.
-        debugPrint('Server initialization skipped: $serverError');
+      if (!_serverOfflineMode) {
+        try {
+          await Future.wait([
+            loadRecentAlbums(),
+            loadRandomSongs(),
+            loadPlaylists(),
+            loadArtists(),
+          ]).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              debugPrint(
+                'Server initialization timed out - continuing in local mode',
+              );
+              throw TimeoutException('Server not responding');
+            },
+          );
+        } catch (serverError) {
+          // Server not configured or error - that's ok for local mode.
+          // Android Auto already has cached data from the push above.
+          debugPrint('Server initialization skipped: $serverError');
+        }
       }
 
       _isInitialized = true;
@@ -363,6 +387,64 @@ class LibraryProvider extends ChangeNotifier {
     }
   }
 
+  /// Push only the downloaded/playable content to Android Auto in server-offline mode.
+  /// Filters songs, albums, and artists to those that have been downloaded so
+  /// the user only sees content they can actually play without a server connection.
+  Future<void> _pushOfflineLibraryToAndroidAuto() async {
+    final offlineService = OfflineService();
+    await offlineService.initialize();
+    final downloadedIds = offlineService.getDownloadedSongIds().toSet();
+
+    if (downloadedIds.isEmpty) {
+      // No explicit downloads — show what we have cached (best-effort)
+      _pushLibraryToAndroidAuto();
+      return;
+    }
+
+    // Songs: only explicitly downloaded ones
+    final offlineSongs = _cachedAllSongs
+        .where((s) => downloadedIds.contains(s.id))
+        .toList();
+    if (offlineSongs.isNotEmpty) {
+      _androidAutoService.updateRecentSongs(offlineSongs, getCoverArtUrl);
+    } else if (_randomSongs.isNotEmpty) {
+      _androidAutoService.updateRecentSongs(_randomSongs, getCoverArtUrl);
+    }
+
+    // Albums: only those that have at least one downloaded song
+    final albumIdsWithDownloads = offlineSongs
+        .map((s) => s.albumId)
+        .whereType<String>()
+        .toSet();
+    final offlineAlbums = _cachedAllAlbums
+        .where((a) => albumIdsWithDownloads.contains(a.id))
+        .toList();
+    if (offlineAlbums.isNotEmpty) {
+      _androidAutoService.updateAlbums(offlineAlbums, getCoverArtUrl);
+    } else if (_recentAlbums.isNotEmpty) {
+      _androidAutoService.updateAlbums(_recentAlbums, getCoverArtUrl);
+    }
+
+    // Artists: only those with downloaded songs
+    final artistIdsWithDownloads = offlineSongs
+        .map((s) => s.artistId)
+        .whereType<String>()
+        .toSet();
+    final offlineArtists = _artists
+        .where((a) => artistIdsWithDownloads.contains(a.id))
+        .toList();
+    if (offlineArtists.isNotEmpty) {
+      _androidAutoService.updateArtists(offlineArtists);
+    } else if (_artists.isNotEmpty) {
+      _androidAutoService.updateArtists(_artists);
+    }
+
+    // Playlists: serve cached playlists as-is (song IDs are stored)
+    if (_playlists.isNotEmpty) {
+      _androidAutoService.updatePlaylists(_playlists, getCoverArtUrl);
+    }
+  }
+
   void _preloadCoverArt() {
     Future.microtask(() async {
       final allAlbums = [..._recentAlbums, ..._randomAlbums];
@@ -388,6 +470,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadArtists() async {
+    if (_serverOfflineMode) return;
     try {
       _artists = await _subsonicService.getArtists();
       notifyListeners();
@@ -403,6 +486,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadRecentAlbums() async {
+    if (_serverOfflineMode) return;
     try {
       _recentAlbums = await _subsonicService.getAlbumList(
         type: 'recent',
@@ -416,6 +500,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadFrequentAlbums() async {
+    if (_serverOfflineMode) return;
     try {
       _frequentAlbums = await _subsonicService.getAlbumList(
         type: 'frequent',
@@ -428,6 +513,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadNewestAlbums() async {
+    if (_serverOfflineMode) return;
     try {
       _newestAlbums = await _subsonicService.getAlbumList(
         type: 'newest',
@@ -440,6 +526,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadRandomAlbums() async {
+    if (_serverOfflineMode) return;
     try {
       _randomAlbums = await _subsonicService.getAlbumList(
         type: 'random',
@@ -452,6 +539,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadPlaylists() async {
+    if (_serverOfflineMode) return;
     try {
       final newPlaylists = await _subsonicService.getPlaylists();
 
@@ -499,6 +587,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadRandomSongs() async {
+    if (_serverOfflineMode) return;
     try {
       _randomSongs = await _subsonicService.getRandomSongs(size: 50);
       notifyListeners();
@@ -513,6 +602,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadGenres() async {
+    if (_serverOfflineMode) return;
     try {
       _richGenres = await _subsonicService.getGenres();
       _genres = _richGenres.map((g) => g.value).toList();
@@ -523,6 +613,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadStarred() async {
+    if (_serverOfflineMode) return;
     try {
       _starred = await _subsonicService.getStarred();
       notifyListeners();
@@ -557,6 +648,18 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<Playlist> getPlaylist(String playlistId) async {
+    // In offline mode skip the server call and return the cached playlist.
+    if (_serverOfflineMode) {
+      final cached = _playlists.firstWhere(
+        (p) => p.id == playlistId,
+        orElse: () => _cachedPlaylists.firstWhere(
+          (p) => p.id == playlistId,
+          orElse: () => throw Exception('Playlist not available offline'),
+        ),
+      );
+      return cached;
+    }
+
     try {
       final playlist = await _subsonicService.getPlaylist(playlistId);
 

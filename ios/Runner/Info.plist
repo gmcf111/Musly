@@ -63,7 +63,27 @@
 		<string>remote-notification</string>
 	</array>
 	
-	<!-- CarPlay Support -->
+	<!-- CarPlay Support TEMPORARILY DISABLED (requires approved entitlement)
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>CPTemplateApplicationScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>CarPlay Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	-->
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>
@@ -89,5 +109,27 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+
+	<!-- Media Library / Music -->
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Musly needs access to your music library to browse and play your songs.</string>
+
+	<!-- Photo Library (album artwork import) -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Musly needs access to your photo library to set custom album artwork.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Musly needs permission to save album artwork to your photo library.</string>
+
+	<!-- File access via Files app / iCloud Drive -->
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Musly needs access to your files to import local music tracks.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+
+	<!-- Microphone (required by some audio APIs) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Musly requires microphone access for certain audio features.</string>
 </dict>
 </plist>

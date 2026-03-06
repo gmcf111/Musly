@@ -1451,5 +1451,17 @@
   },
 
   "noArtwork": "No artwork",
-  "@noArtwork": { "description": "Placeholder label shown in the player when a song has no cover art" }
+  "@noArtwork": { "description": "Placeholder label shown in the player when a song has no cover art" },
+
+  "serverUnreachableTitle": "Cannot reach server",
+  "@serverUnreachableTitle": { "description": "Title on the server-unreachable screen" },
+
+  "serverUnreachableSubtitle": "Check your connection or server settings.",
+  "@serverUnreachableSubtitle": { "description": "Subtitle on the server-unreachable screen" },
+
+  "openOfflineMode": "Open in offline mode",
+  "@openOfflineMode": { "description": "Button to enter offline mode from the server-unreachable screen" },
+
+  "disconnect": "Disconnect",
+  "@disconnect": { "description": "Button to clear server credentials and go back to login" }
 }

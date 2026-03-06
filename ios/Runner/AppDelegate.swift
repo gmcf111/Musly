@@ -23,6 +23,12 @@ import AVFoundation
       if bluetoothPluginRegistrar != nil {
         iOSBluetoothPlugin.register(with: bluetoothPluginRegistrar!)
       }
+
+      // AirPlay button platform view
+      let airPlayRegistrar = registrar(forPlugin: "AirPlayButtonFactory")
+      if airPlayRegistrar != nil {
+        registerAirPlayButtonFactory(with: airPlayRegistrar!)
+      }
     }
     
     // Configure audio session for background playback

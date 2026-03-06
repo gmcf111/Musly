@@ -48,7 +48,8 @@ class AndroidSystemService {
   bool get colorizeNotification => _colorizeNotification;
 
   Future<void> initialize() async {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) return;
     if (_isInitialized) return;
 
     try {
@@ -66,9 +67,13 @@ class AndroidSystemService {
       });
 
       _isInitialized = true;
-      debugPrint('AndroidSystemService initialized');
+      debugPrint(
+        defaultTargetPlatform == TargetPlatform.iOS
+            ? 'iOSSystemPlugin initialized'
+            : 'AndroidSystemService initialized',
+      );
     } catch (e) {
-      debugPrint('Error initializing AndroidSystemService: $e');
+      debugPrint('Error initializing system service: $e');
     }
   }
 
@@ -142,7 +147,8 @@ class AndroidSystemService {
     String? genre,
     int? year,
   }) async {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) return;
 
     try {
       await _methodChannel.invokeMethod('updatePlaybackState', {
@@ -202,7 +208,10 @@ class AndroidSystemService {
   }
 
   Future<bool> requestAudioFocus() async {
-    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    // Works on Android and iOS — iOSSystemPlugin handles this on iOS to
+    // re-activate AVAudioSession after volume_controller deactivates it.
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) return true;
 
     try {
       final result = await _methodChannel.invokeMethod<bool>(
@@ -216,7 +225,8 @@ class AndroidSystemService {
   }
 
   Future<void> abandonAudioFocus() async {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) return;
 
     try {
       await _methodChannel.invokeMethod('abandonAudioFocus');
@@ -232,7 +242,8 @@ class AndroidSystemService {
     bool? showInQuickSettings,
     bool? colorizeNotification,
   }) async {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) return;
 
     if (showOnLockScreen != null) _showOnLockScreen = showOnLockScreen;
     if (handleAudioFocus != null) _handleAudioFocus = handleAudioFocus;
@@ -255,7 +266,8 @@ class AndroidSystemService {
   }
 
   Future<Map<String, dynamic>> getSystemInfo() async {
-    if (defaultTargetPlatform != TargetPlatform.android) {
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) {
       return {};
     }
 

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -335,6 +336,36 @@ class _LoginScreenState extends State<LoginScreen> {
             backgroundColor: Colors.red,
           ),
         );
+      }
+      return;
+    }
+
+    // On iOS: use system file picker instead of directory scan
+    if (Platform.isIOS) {
+      setState(() {
+        _isScanning = true;
+        _scanProgress = 0.0;
+        _scanStatus = 'Select your music files...';
+      });
+      try {
+        final added = await localService.pickAndAddFiles();
+        if (mounted) {
+          if (localService.songs.isNotEmpty) {
+            final authProvider = Provider.of<AuthProvider>(context, listen: false);
+            await authProvider.setLocalOnlyMode(true);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(added == 0
+                    ? 'No files selected. Tap "Use Local Files" and pick your music files.'
+                    : AppLocalizations.of(context)!.noMusicFilesFound),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+      } finally {
+        if (mounted) setState(() => _isScanning = false);
       }
       return;
     }
@@ -883,8 +914,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Use Local Files button
-                  SizedBox(
+                  // Use Local Files button (disabled on iOS)
+                  if (!Platform.isIOS) SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: OutlinedButton.icon(
@@ -920,7 +951,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
 
                   // Scan progress bar
-                  if (_isScanning) ...[
+                  if (!Platform.isIOS && _isScanning) ...[
                     const SizedBox(height: 12),
                     LinearProgressIndicator(
                       value: _scanProgress > 0 ? _scanProgress : null,

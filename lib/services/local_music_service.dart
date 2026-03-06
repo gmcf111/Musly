@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -131,11 +132,80 @@ class LocalMusicService extends ChangeNotifier {
     }
 
     if (Platform.isIOS) {
+      // Request media library access for reading music metadata
+      final status = await Permission.mediaLibrary.request();
+      // Even if denied we can still let the user pick files via FilePicker,
+      // so we always return true and handle lack of access gracefully.
+      debugPrint('iOS mediaLibrary permission: $status');
       return true;
     }
 
     // Desktop platforms don't need permission
     return true;
+  }
+
+  /// iOS: open system file picker, copy selected audio files into the app's
+  /// Documents directory (permanent sandbox-accessible path), and add them.
+  /// Returns the number of songs added.
+  Future<int> pickAndAddFiles() async {
+    if (!Platform.isIOS) return 0;
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp3', 'flac', 'm4a', 'aac', 'wav', 'ogg', 'opus', 'wma'],
+      allowMultiple: true,
+      withData: false,
+      withReadStream: false,
+    );
+
+    if (result == null || result.files.isEmpty) return 0;
+
+    // Destination: <Documents>/Music/ — always accessible by the app & AVPlayer
+    final docsDir = await getApplicationDocumentsDirectory();
+    final musicDir = Directory('${docsDir.path}/Music');
+    if (!await musicDir.exists()) await musicDir.create(recursive: true);
+
+    final before = _songs.length;
+
+    for (final pf in result.files) {
+      final srcPath = pf.path;
+      if (srcPath == null) continue;
+      final srcFile = File(srcPath);
+      if (!await srcFile.exists()) continue;
+
+      // Copy file into sandbox so AVPlayer can read it without auth errors
+      final destPath = '${musicDir.path}/${pf.name}';
+      final destFile = File(destPath);
+      File fileToProcess;
+      try {
+        if (!await destFile.exists()) {
+          await srcFile.copy(destPath);
+        }
+        fileToProcess = destFile;
+      } catch (e) {
+        debugPrint('Failed to copy picked file to sandbox: $e — using original path');
+        fileToProcess = srcFile;
+      }
+
+      // Skip duplicates (by stable dest path)
+      final id = 'local_${destPath.hashCode.abs()}';
+      if (_songs.any((s) => s.id == id)) continue;
+
+      try {
+        final song = await _processAudioFile(fileToProcess);
+        _songs.add(song);
+      } catch (e) {
+        debugPrint('Error processing picked file $destPath: $e');
+      }
+    }
+
+    if (_songs.length != before) {
+      _buildAlbumsAndArtists();
+      await _cacheLibrary();
+      notifyListeners();
+    }
+
+    return _songs.length - before;
   }
 
   /// Scan device for audio files
@@ -212,6 +282,14 @@ class LocalMusicService extends ChangeNotifier {
   List<String> _getDefaultScanPaths() {
     if (Platform.isAndroid) {
       return _defaultScanPaths;
+    } else if (Platform.isIOS) {
+      // On iOS we can only scan directories inside our own sandbox.
+      // Scan the Documents/Music folder where pickAndAddFiles() copies files.
+      final docs = _artCacheDir != null
+          ? path.join(path.dirname(path.dirname(_artCacheDir!)), 'Music')
+          : null;
+      if (docs != null) return [docs];
+      return [];
     } else if (Platform.isWindows) {
       final userProfile = Platform.environment['USERPROFILE'] ?? '';
       return ['$userProfile\\Music', '$userProfile\\Downloads'];
@@ -490,6 +568,40 @@ class LocalMusicService extends ChangeNotifier {
           .toList();
 
       if (cachedSongs.isEmpty) return;
+
+      // iOS: remap song paths to the stable Documents/Music sandbox directory.
+      // The picker gives temporary paths that change every launch; the real
+      // files were copied into Documents/Music/ by pickAndAddFiles().
+      if (Platform.isIOS) {
+        final docsDir = await getApplicationDocumentsDirectory();
+        final musicDirPath = '${docsDir.path}/Music';
+
+        final remapped = <Song>[];
+        for (final song in cachedSongs) {
+          if (song.path == null) continue;
+          final filename = path.basename(song.path!);
+          final sandboxPath = '$musicDirPath/$filename';
+          if (await File(sandboxPath).exists()) {
+            // Rebuild song with corrected stable path & id
+            final fixedSong = song.copyWith(
+              path: sandboxPath,
+              id: 'local_${sandboxPath.hashCode.abs()}',
+            );
+            remapped.add(fixedSong);
+          } else {
+            debugPrint('Dropping cached song (file missing in sandbox): $filename');
+          }
+        }
+        if (remapped.isEmpty) return;
+        _songs.clear();
+        _songs.addAll(remapped);
+        _buildAlbumsAndArtists();
+        notifyListeners();
+        debugPrint('Loaded ${_songs.length} songs from local cache (iOS paths remapped).');
+        // Persist updated paths immediately
+        await _cacheLibrary();
+        return;
+      }
 
       _songs.clear();
       _songs.addAll(cachedSongs);

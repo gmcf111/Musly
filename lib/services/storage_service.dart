@@ -107,6 +107,18 @@ class StorageService {
     return prefs.getBool('discord_rpc_enabled') ?? true; // Default to true
   }
 
+  // https://github.com/dddevid/Musly/issues/69
+  // Values: 'artist' (default), 'song_title', 'app_name'
+  Future<void> saveDiscordRpcStateStyle(String style) async {
+    final prefs = await _prefs;
+    await prefs.setString('discord_rpc_state_style', style);
+  }
+
+  Future<String> getDiscordRpcStateStyle() async {
+    final prefs = await _prefs;
+    return prefs.getString('discord_rpc_state_style') ?? 'artist';
+  }
+
   Future<void> clearAll() async {
     final prefs = await _prefs;
     await prefs.clear();

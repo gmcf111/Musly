@@ -142,9 +142,107 @@ jobs:
           name: linux-build
           path: musly-linux-x64.tar.gz
 
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Generate localizations
+        run: flutter gen-l10n
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd ios
+          pod install --repo-update
+
+      - name: Build iOS (no code sign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/Runner.app
+          zip -r musly-ios.ipa Payload
+          rm -rf Payload
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: musly-ios.ipa
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Generate localizations
+        run: flutter gen-l10n
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd macos
+          pod install --repo-update
+
+      - name: Build macOS
+        run: flutter build macos --release
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Package DMG
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "Musly ${{ steps.version.outputs.VERSION }}" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "Musly.app" 200 190 \
+            --hide-extension "Musly.app" \
+            --app-drop-link 600 185 \
+            "musly-macos.dmg" \
+            "build/macos/Build/Products/Release/"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: musly-macos.dmg
+
   create-release:
     name: Create GitHub Release
-    needs: [build-android, build-windows, build-linux]
+    needs: [build-android, build-windows, build-linux, build-ios, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -182,8 +280,14 @@ jobs:
             - ARMv7: `app-armeabi-v7a-release.apk` (for older devices)
             - x86_64: `app-x86_64-release.apk` (for emulators)
 
+            **iOS:**
+            - `musly-ios.ipa` (sideload with AltStore, Sideloadly, or similar — not signed)
+
             **Windows:**
             - `musly-windows-setup.exe` (setup installer, run to install Musly)
+
+            **macOS:**
+            - `musly-macos.dmg` (drag Musly.app to Applications — not notarized)
 
             **Linux:**
             - `musly-linux-x64.tar.gz` (extract and run musly)
@@ -197,7 +301,9 @@ jobs:
           prerelease: false
           files: |
             artifacts/android-apk/*.apk
+            artifacts/ios-build/*.ipa
             artifacts/windows-build/*.exe
+            artifacts/macos-build/*.dmg
             artifacts/linux-build/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

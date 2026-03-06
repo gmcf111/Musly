@@ -44,6 +44,12 @@ class OfflineService {
   SharedPreferences? _prefs;
   String? _offlineDir;
 
+  // Set to true when the user enters server-offline mode so that
+  // PlayerProvider does not fall back to server artwork URLs.
+  bool _offlineMode = false;
+  bool get isOfflineMode => _offlineMode;
+  void setOfflineMode(bool value) => _offlineMode = value;
+
   final ValueNotifier<DownloadState> downloadState = ValueNotifier(
     DownloadState(),
   );
@@ -65,6 +71,41 @@ class OfflineService {
 
   String _getSongPath(String songId) {
     return '$_offlineDir/$songId.mp3';
+  }
+
+  String _getLyricsPath(String songId) {
+    return '$_offlineDir/$songId.lyrics.json';
+  }
+
+  String _getCoverArtPath(String songId) {
+    return '$_offlineDir/$songId.jpg';
+  }
+
+  String? getLocalCoverArtPath(String songId) {
+    if (_offlineDir == null) return null;
+    final path = _getCoverArtPath(songId);
+    if (File(path).existsSync()) return path;
+    return null;
+  }
+
+  Future<void> saveLyrics(String songId, Map<String, dynamic> data) async {
+    if (_offlineDir == null) await initialize();
+    try {
+      await File(_getLyricsPath(songId)).writeAsString(jsonEncode(data));
+    } catch (e) {
+      debugPrint('Error saving lyrics: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getLocalLyrics(String songId) async {
+    if (_offlineDir == null) await initialize();
+    try {
+      final file = File(_getLyricsPath(songId));
+      if (!file.existsSync()) return null;
+      return jsonDecode(await file.readAsString()) as Map<String, dynamic>?;
+    } catch (e) {
+      return null;
+    }
   }
 
   bool isSongDownloaded(String songId) {
@@ -131,6 +172,32 @@ class OfflineService {
       if (!downloadedIds.contains(song.id)) {
         downloadedIds.add(song.id);
         await _prefs?.setStringList(_keyDownloadedSongs, downloadedIds);
+      }
+
+      // Download cover art for offline artwork display
+      try {
+        if (song.coverArt != null) {
+          final coverUrl = subsonicService.getCoverArtUrl(song.coverArt, size: 600);
+          if (coverUrl.isNotEmpty) {
+            final dioCover = Dio();
+            await dioCover.download(coverUrl, _getCoverArtPath(song.id));
+          }
+        }
+      } catch (e) {
+        debugPrint('Error downloading cover art for ${song.title}: $e');
+      }
+      try {
+        final lyricsMap = <String, dynamic>{};
+        final syncedLyrics = await subsonicService.getLyricsBySongId(song.id);
+        if (syncedLyrics != null) lyricsMap['lyricsList'] = syncedLyrics;
+        final plainLyrics = await subsonicService.getLyrics(
+          artist: song.artist,
+          title: song.title,
+        );
+        if (plainLyrics != null) lyricsMap['lyrics'] = plainLyrics;
+        if (lyricsMap.isNotEmpty) await saveLyrics(song.id, lyricsMap);
+      } catch (e) {
+        debugPrint('Error downloading lyrics for ${song.title}: $e');
       }
 
       return true;
@@ -251,6 +318,14 @@ class OfflineService {
       final file = File(_getSongPath(songId));
       if (await file.exists()) {
         await file.delete();
+      }
+      final lyricsFile = File(_getLyricsPath(songId));
+      if (await lyricsFile.exists()) {
+        await lyricsFile.delete();
+      }
+      final coverArtFile = File(_getCoverArtPath(songId));
+      if (await coverArtFile.exists()) {
+        await coverArtFile.delete();
       }
 
       final downloadedIds = getDownloadedSongIds();

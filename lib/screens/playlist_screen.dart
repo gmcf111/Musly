@@ -3,6 +3,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/subsonic_service.dart';
+import '../services/offline_service.dart';
+import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 
@@ -23,6 +26,7 @@ class PlaylistScreen extends StatefulWidget {
 class _PlaylistScreenState extends State<PlaylistScreen> {
   Playlist? _playlist;
   bool _isLoading = true;
+  bool _isDownloading = false;
 
   @override
   void initState() {
@@ -64,6 +68,82 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     playerProvider.playSong(songs.first, playlist: songs.cast(), startIndex: 0);
   }
 
+  // https://github.com/dddevid/Musly/issues/77
+  // Remove a song at [index] from the playlist using songIndexToRemove API.
+  Future<void> _removeSongFromPlaylist(int index) async {
+    final subsonicService = Provider.of<SubsonicService>(
+      context,
+      listen: false,
+    );
+    try {
+      await subsonicService.updatePlaylist(
+        playlistId: widget.playlistId,
+        songIndexesToRemove: [index],
+      );
+      setState(() {
+        final updatedSongs = List<Song>.from(_playlist!.songs!)..removeAt(index);
+        _playlist = _playlist!.copyWith(
+          songCount: updatedSongs.length,
+          songs: updatedSongs,
+        );
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Song removed from playlist'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error removing song: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  // https://github.com/dddevid/Musly/issues/78
+  // Download every song in the playlist for offline playback.
+  Future<void> _downloadPlaylist() async {
+    final songs = _playlist?.songs;
+    if (songs == null || songs.isEmpty) return;
+
+    final subsonicService = Provider.of<SubsonicService>(
+      context,
+      listen: false,
+    );
+    final offlineService = OfflineService();
+    await offlineService.initialize();
+
+    setState(() => _isDownloading = true);
+
+    offlineService.startBackgroundDownload(songs, subsonicService).then((_) {
+      if (mounted) {
+        setState(() => _isDownloading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Downloaded ${songs.length} songs from ${_playlist!.name}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Downloading ${songs.length} songs in background…'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -86,8 +166,29 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       );
     }
 
+    final isOffline =
+        Provider.of<AuthProvider>(context, listen: false).state ==
+        AuthState.offlineMode;
+
     return Scaffold(
-      appBar: AppBar(title: Text(_playlist!.name)),
+      appBar: AppBar(
+        title: Text(_playlist!.name),
+        actions: [
+          if (!isOffline)
+            // https://github.com/dddevid/Musly/issues/78
+            IconButton(
+              tooltip: 'Download playlist',
+              onPressed: _isDownloading ? null : _downloadPlaylist,
+              icon: _isDownloading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(CupertinoIcons.cloud_download),
+            ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -172,11 +273,54 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                     itemCount: _playlist!.songs!.length,
                     itemBuilder: (context, index) {
                       final song = _playlist!.songs![index];
-                      return SongTile(
-                        song: song,
-                        playlist: _playlist!.songs,
-                        index: index,
-                        showArtist: true,
+                      // https://github.com/dddevid/Musly/issues/77
+                      // Swipe left to remove the song from this playlist.
+                      return Dismissible(
+                        key: ValueKey('${song.id}_$index'),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          color: Colors.red,
+                          child: const Icon(
+                            CupertinoIcons.trash,
+                            color: Colors.white,
+                          ),
+                        ),
+                        confirmDismiss: (_) async {
+                          return await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Remove from playlist'),
+                                  content: Text(
+                                    'Remove "${song.title}" from this playlist?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, true),
+                                      child: const Text(
+                                        'Remove',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
+                        },
+                        onDismissed: (_) => _removeSongFromPlaylist(index),
+                        child: SongTile(
+                          song: song,
+                          playlist: _playlist!.songs,
+                          index: index,
+                          showArtist: true,
+                        ),
                       );
                     },
                   ),

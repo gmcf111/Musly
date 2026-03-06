@@ -662,7 +662,8 @@ class _SettingsSheet extends StatelessWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
@@ -694,8 +695,12 @@ class _SettingsSheet extends StatelessWidget {
                   child: Row(
                     children: [
                       Icon(
-                        CupertinoIcons.checkmark_circle_fill,
-                        color: Colors.green,
+                        authProvider.state == AuthState.offlineMode
+                            ? CupertinoIcons.wifi_slash
+                            : CupertinoIcons.checkmark_circle_fill,
+                        color: authProvider.state == AuthState.offlineMode
+                            ? Colors.orange
+                            : Colors.green,
                         size: 24,
                       ),
                       const SizedBox(width: 12),
@@ -704,7 +709,9 @@ class _SettingsSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              AppLocalizations.of(context)!.connected,
+                              authProvider.state == AuthState.offlineMode
+                                  ? AppLocalizations.of(context)!.offlineMode
+                                  : AppLocalizations.of(context)!.connected,
                               style: theme.textTheme.titleMedium,
                             ),
                             Text(
@@ -751,6 +758,7 @@ class _SettingsSheet extends StatelessWidget {
             ),
             const SizedBox(height: 32),
           ],
+        ),
         ),
       ),
     );

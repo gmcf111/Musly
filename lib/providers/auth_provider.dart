@@ -10,6 +10,7 @@ enum AuthState {
   authenticating,
   authenticated,
   offlineMode, // Server unreachable but has downloaded content
+  serverUnreachable, // Server could not be reached on startup
   error,
 }
 
@@ -20,6 +21,7 @@ class AuthProvider extends ChangeNotifier {
   AuthState _state = AuthState.unknown;
   String? _error;
   ServerConfig? _config;
+  bool _hasOfflineContent = false;
 
   AuthProvider(this._subsonicService, this._storageService) {
     _loadSavedConfig();
@@ -29,6 +31,7 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   ServerConfig? get config => _config;
   bool get isAuthenticated => _state == AuthState.authenticated;
+  bool get hasOfflineContent => _hasOfflineContent;
 
   Future<void> _loadSavedConfig() async {
     final config = await _storageService.getServerConfig();
@@ -37,6 +40,7 @@ class AuthProvider extends ChangeNotifier {
 
       // Local-only mode: skip server ping entirely
       if (config.serverType == 'local') {
+        OfflineService().setOfflineMode(true);
         _state = AuthState.offlineMode;
         notifyListeners();
         return;
@@ -54,7 +58,10 @@ class AuthProvider extends ChangeNotifier {
     _state = AuthState.authenticating;
     notifyListeners();
 
-    final pingResult = await _subsonicService.pingWithError();
+    final pingResult = await _subsonicService.pingWithError().timeout(
+      const Duration(seconds: 6),
+      onTimeout: () => PingResult(success: false, error: 'Connection timed out'),
+    );
     if (pingResult.success) {
       if (_config != null) {
         final updatedConfig = _config!.copyWith(
@@ -77,19 +84,27 @@ class AuthProvider extends ChangeNotifier {
             (e) => debugPrint('Error flushing pending scrobbles: $e'),
           );
     } else {
-      // Check if we have offline content
+      // Server unreachable — let user choose offline or disconnect
       final offlineService = OfflineService();
       await offlineService.initialize();
-      final downloadedCount = offlineService.getDownloadedCount();
-
-      if (downloadedCount > 0) {
-        // Allow offline mode if we have downloaded content
-        _state = AuthState.offlineMode;
-        _error = 'Server unreachable. Playing offline content only.';
-      } else {
-        _state = AuthState.unauthenticated;
-      }
+      _hasOfflineContent = offlineService.getDownloadedCount() > 0;
+      _state = AuthState.serverUnreachable;
     }
+    notifyListeners();
+  }
+
+  /// Transition from serverUnreachable to offline mode.
+  void enterOfflineMode() {
+    OfflineService().setOfflineMode(true);
+    _state = AuthState.offlineMode;
+    notifyListeners();
+  }
+
+  /// Clear server credentials and go back to login without deleting downloads.
+  Future<void> disconnect() async {
+    _config = null;
+    _state = AuthState.unauthenticated;
+    await _storageService.clearAll();
     notifyListeners();
   }
 

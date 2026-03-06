@@ -61,8 +61,6 @@ dependencies:
   audio_metadata_reader: ^1.4.2
   
   device_info_plus: ^10.1.2
-  lottie: ^3.1.2
-  dotlottie_loader: ^0.0.5
   smtc_windows: ^1.1.0
   windows_taskbar: ^1.1.2
   battery_plus: ^4.0.2

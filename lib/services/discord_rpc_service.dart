@@ -79,17 +79,14 @@ class DiscordRpcService {
     String? button1Label,
     String? button1Url,
   }) {
-    if (!_enabled) {
-      debugPrint('Discord RPC is disabled, ignoring update.');
-      return;
-    }
+    // Discord RPC is desktop-only; silently ignore calls on mobile/web.
+    if (kIsWeb ||
+        !(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) return;
+    if (!_enabled) return;
     if (!_initialized || _rpc == null) {
-      debugPrint('Discord RPC not initialized, try re-initializing.');
-      _startRpc(); // Try to start if not ready
+      _startRpc();
       if (_rpc == null) return;
     }
-
-    debugPrint('Updating Discord Presence: $details - $state');
 
     try {
       _rpc!.updatePresence(
@@ -114,6 +111,8 @@ class DiscordRpcService {
   }
 
   void clearPresence() {
+    if (kIsWeb ||
+        !(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) return;
     debugPrint('Clearing Discord Presence');
     if (_initialized) {
       try {

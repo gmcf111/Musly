@@ -9,6 +9,7 @@ import '../services/jukebox_service.dart';
 import '../services/player_ui_settings_service.dart';
 import '../services/subsonic_service.dart';
 import '../services/offline_service.dart';
+import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import 'album_artwork.dart';
 import 'animated_equalizer.dart';
@@ -406,6 +407,10 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
   }
 
   Widget _buildDownloadTile(BuildContext context) {
+    final isOffline =
+        Provider.of<AuthProvider>(context, listen: false).state ==
+        AuthState.offlineMode;
+
     if (_isDownloading) {
       return ListTile(
         leading: SizedBox(
@@ -467,6 +472,8 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
         },
       );
     }
+
+    if (isOffline) return const SizedBox.shrink();
 
     return _OptionTile(
       icon: Icons.download_rounded,

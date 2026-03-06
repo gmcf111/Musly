@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'dart:convert';
-import 'package:dio/dio.dart';
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:just_audio/just_audio.dart';
 import '../models/models.dart';
 import '../services/subsonic_service.dart';
@@ -35,8 +37,7 @@ class PlayerProvider extends ChangeNotifier {
   final AutoDjService _autoDjService = AutoDjService();
   late final DiscordRpcService _discordRpcService;
   final CastService _castService;
-  final UpnpService _upnpService;
-
+  late final UpnpService _upnpService;
   LibraryProvider? _libraryProvider;
   RecommendationService? _recommendationService;
 
@@ -51,12 +52,23 @@ class PlayerProvider extends ChangeNotifier {
   Song? _currentSong;
   double _volume = 1.0;
 
+  // Pre-resolved artwork URL (local file path or server URL, set async per-song)
+  String? _resolvedArtworkUrl;
+
   // Radio station support
   RadioStation? _currentRadioStation;
   bool _isPlayingRadio = false;
 
   // Android 16 Media3 workaround: track first playback attempt
   bool _hasPlayedOnce = false;
+
+  // Suppresses playerStateStream UI notifications during session reactivation
+  // to avoid visual micro-stutters from the internal pause→play cycle.
+  bool _reactivatingSession = false;
+
+  // https://github.com/dddevid/Musly/issues/72 — sleep timer
+  Timer? _sleepTimer;
+  DateTime? _sleepTimerEnd;
 
   PlayerProvider(
     this._subsonicService,
@@ -72,7 +84,12 @@ class PlayerProvider extends ChangeNotifier {
     _initializeAndroidAuto();
     _initializeSystemServices();
     _initializeAutoDj();
-    _discordRpcService.initialize();
+    // Discord RPC is desktop-only (Windows / Linux / macOS).
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      _discordRpcService.initialize();
+      loadDiscordRpcStateStyle();
+    }
   }
 
   void setLibraryProvider(LibraryProvider libraryProvider) {
@@ -185,11 +202,37 @@ class PlayerProvider extends ChangeNotifier {
     _androidAutoService.onGetAlbumSongs = _getAlbumSongsForAndroidAuto;
     _androidAutoService.onGetArtistAlbums = _getArtistAlbumsForAndroidAuto;
     _androidAutoService.onGetPlaylistSongs = _getPlaylistSongsForAndroidAuto;
+    _androidAutoService.onSearch = _searchForAndroidAuto;
+    _androidAutoService.onPlayFromSearch = _playFromSearchForAndroidAuto;
   }
 
   Future<List<Map<String, String>>> _getAlbumSongsForAndroidAuto(
     String albumId,
   ) async {
+    // In offline mode, serve directly from the cached library + downloaded songs.
+    if (_offlineService.isOfflineMode && _libraryProvider != null) {
+      await _offlineService.initialize();
+      final downloadedIds = _offlineService.getDownloadedSongIds().toSet();
+      final offlineSongs = _libraryProvider!.cachedAllSongs
+          .where((s) => s.albumId == albumId && downloadedIds.contains(s.id))
+          .toList();
+      if (offlineSongs.isNotEmpty) {
+        return offlineSongs
+            .map(
+              (song) => {
+                'id': song.id,
+                'title': song.title,
+                'artist': song.artist ?? '',
+                'album': song.album ?? '',
+                'artworkUrl': _offlineService.getLocalCoverArtPath(song.id) != null
+                    ? Uri.file(_offlineService.getLocalCoverArtPath(song.id)!).toString()
+                    : _subsonicService.getCoverArtUrl(song.coverArt, size: 300),
+                'duration': (song.duration ?? 0).toString(),
+              },
+            )
+            .toList();
+      }
+    }
     try {
       final songs = await _subsonicService.getAlbumSongs(albumId);
       return songs
@@ -216,6 +259,34 @@ class PlayerProvider extends ChangeNotifier {
   Future<List<Map<String, String>>> _getArtistAlbumsForAndroidAuto(
     String artistId,
   ) async {
+    // In offline mode, derive albums from downloaded songs in the cached library.
+    if (_offlineService.isOfflineMode && _libraryProvider != null) {
+      await _offlineService.initialize();
+      final downloadedIds = _offlineService.getDownloadedSongIds().toSet();
+      final albumIdsWithDownloads = _libraryProvider!.cachedAllSongs
+          .where((s) => s.artistId == artistId && downloadedIds.contains(s.id))
+          .map((s) => s.albumId)
+          .whereType<String>()
+          .toSet();
+      final offlineAlbums = _libraryProvider!.cachedAllAlbums
+          .where((a) => albumIdsWithDownloads.contains(a.id))
+          .toList();
+      if (offlineAlbums.isNotEmpty) {
+        return offlineAlbums
+            .map(
+              (album) => {
+                'id': album.id,
+                'name': album.name,
+                'artist': album.artist ?? '',
+                'artworkUrl': _subsonicService.getCoverArtUrl(
+                  album.coverArt,
+                  size: 300,
+                ),
+              },
+            )
+            .toList();
+      }
+    }
     try {
       final albums = await _subsonicService.getArtistAlbums(artistId);
       return albums
@@ -240,6 +311,35 @@ class PlayerProvider extends ChangeNotifier {
   Future<List<Map<String, String>>> _getPlaylistSongsForAndroidAuto(
     String playlistId,
   ) async {
+    // In offline mode, serve from the cached playlist songs (no network call).
+    if (_offlineService.isOfflineMode && _libraryProvider != null) {
+      await _offlineService.initialize();
+      final downloadedIds = _offlineService.getDownloadedSongIds().toSet();
+      final cachedPlaylist = _libraryProvider!.playlists
+          .where((p) => p.id == playlistId)
+          .firstOrNull;
+      if (cachedPlaylist?.songs != null && cachedPlaylist!.songs!.isNotEmpty) {
+        final offlineSongs = cachedPlaylist.songs!
+            .where((s) => downloadedIds.contains(s.id))
+            .toList();
+        if (offlineSongs.isNotEmpty) {
+          return offlineSongs
+              .map(
+                (song) => {
+                  'id': song.id,
+                  'title': song.title,
+                  'artist': song.artist ?? '',
+                  'album': song.album ?? '',
+                  'artworkUrl': _offlineService.getLocalCoverArtPath(song.id) != null
+                      ? Uri.file(_offlineService.getLocalCoverArtPath(song.id)!).toString()
+                      : _subsonicService.getCoverArtUrl(song.coverArt, size: 300),
+                  'duration': (song.duration ?? 0).toString(),
+                },
+              )
+              .toList();
+        }
+      }
+    }
     try {
       final playlist = await _subsonicService.getPlaylist(playlistId);
       final songs = playlist.songs ?? [];
@@ -261,6 +361,102 @@ class PlayerProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error getting playlist songs for Android Auto: $e');
       return [];
+    }
+  }
+
+  Future<List<Map<String, String>>> _searchForAndroidAuto(
+    String query,
+  ) async {
+    // In offline mode, search within the cached downloaded songs.
+    if (_offlineService.isOfflineMode && _libraryProvider != null) {
+      await _offlineService.initialize();
+      final downloadedIds = _offlineService.getDownloadedSongIds().toSet();
+      final lowerQuery = query.toLowerCase();
+      final offlineResults = _libraryProvider!.cachedAllSongs
+          .where(
+            (s) =>
+                downloadedIds.contains(s.id) &&
+                (s.title.toLowerCase().contains(lowerQuery) ||
+                    (s.artist?.toLowerCase().contains(lowerQuery) ?? false) ||
+                    (s.album?.toLowerCase().contains(lowerQuery) ?? false)),
+          )
+          .take(20)
+          .toList();
+      return offlineResults
+          .map(
+            (song) => {
+              'id': song.id,
+              'title': song.title,
+              'artist': song.artist ?? '',
+              'album': song.album ?? '',
+              'artworkUrl': _offlineService.getLocalCoverArtPath(song.id) != null
+                  ? Uri.file(_offlineService.getLocalCoverArtPath(song.id)!).toString()
+                  : _subsonicService.getCoverArtUrl(song.coverArt, size: 300),
+              'duration': (song.duration ?? 0).toString(),
+            },
+          )
+          .toList();
+    }
+    try {
+      final results = await _subsonicService.search(
+        query,
+        songCount: 20,
+        albumCount: 0,
+        artistCount: 0,
+      );
+      return results.songs
+          .map(
+            (song) => {
+              'id': song.id,
+              'title': song.title,
+              'artist': song.artist ?? '',
+              'album': song.album ?? '',
+              'artworkUrl': _subsonicService.getCoverArtUrl(
+                song.coverArt,
+                size: 300,
+              ),
+              'duration': (song.duration ?? 0).toString(),
+            },
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('Android Auto search error: $e');
+      return [];
+    }
+  }
+
+  Future<void> _playFromSearchForAndroidAuto(String query) async {
+    debugPrint('Android Auto: playFromSearch called with query: "$query"');
+    try {
+      // Empty query = play anything (resume or play first available song)
+      if (query.trim().isEmpty) {
+        if (_currentSong != null) {
+          await play();
+        } else if (_libraryProvider != null &&
+            _libraryProvider!.randomSongs.isNotEmpty) {
+          final songs = _libraryProvider!.randomSongs;
+          await playSong(songs.first, playlist: songs, startIndex: 0);
+        }
+        return;
+      }
+
+      final results = await _subsonicService.search(
+        query,
+        songCount: 20,
+        albumCount: 0,
+        artistCount: 0,
+      );
+      if (results.songs.isNotEmpty) {
+        await playSong(
+          results.songs.first,
+          playlist: results.songs,
+          startIndex: 0,
+        );
+      } else {
+        debugPrint('Android Auto: no search results for "$query"');
+      }
+    } catch (e) {
+      debugPrint('Android Auto: playFromSearch error: $e');
     }
   }
 
@@ -306,17 +502,85 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  String? _resolveArtworkUrl() {
+    if (_currentSong == null) return null;
+    if (_currentSong!.coverArt == null) return null;
+    if (_currentSong!.isLocal) {
+      return Uri.file(_currentSong!.coverArt!).toString();
+    }
+    // Return the pre-resolved artwork URL (local file or server URL).
+    // _resolvedArtworkUrl is populated asynchronously by _refreshArtworkUrl()
+    // which is triggered in playSong() and playRadioStation().
+    return _resolvedArtworkUrl;
+  }
+
+  /// Asynchronously resolves the best artwork URL for [_currentSong] and
+  /// stores it in [_resolvedArtworkUrl].  Priority:
+  ///   1. downloaded .jpg in offline_music/
+  ///   2. flutter_cache_manager disk cache (filled by CachedNetworkImage)
+  ///   3. Subsonic server URL (works online, may fail offline)
+  Future<void> _refreshArtworkUrl() async {
+    final song = _currentSong;
+    if (song == null || song.coverArt == null) {
+      _resolvedArtworkUrl = null;
+      return;
+    }
+    if (song.isLocal) {
+      _resolvedArtworkUrl = Uri.file(song.coverArt!).toString();
+      return;
+    }
+
+    // Ensure offline dir is set before calling getLocalCoverArtPath
+    await _offlineService.initialize();
+
+    // 1. Our own offline_music/<id>.jpg (downloaded alongside the song)
+    final localPath = _offlineService.getLocalCoverArtPath(song.id);
+    if (localPath != null) {
+      _resolvedArtworkUrl = Uri.file(localPath).toString();
+      if (_currentSong?.id == song.id) _updateAllServices();
+      return;
+    }
+
+    // 2. flutter_cache_manager disk cache (populated by CachedNetworkImage
+    //    while the app was online — works without a server connection).
+    //    CachedNetworkImage stores entries under custom cache keys of the form
+    //    '${coverArt}_$cacheSize' and '${coverArt}_natural_$cacheSize', NOT
+    //    the raw URL, so we must probe those keys instead of the URL.
+    final coverArtId = song.coverArt!;
+    // Try common resolvedSizes (largest first for best artwork quality).
+    for (final sz in [400, 300, 200, 150, 100]) {
+      for (final key in ['${coverArtId}_natural_$sz', '${coverArtId}_$sz']) {
+        try {
+          final fileInfo = await DefaultCacheManager().getFileFromCache(key);
+          if (fileInfo != null && fileInfo.file.existsSync()) {
+            if (_currentSong?.id == song.id) {
+              _resolvedArtworkUrl = Uri.file(fileInfo.file.path).toString();
+              _updateAllServices();
+            }
+            return;
+          }
+        } catch (_) {}
+      }
+    }
+    final serverUrl = _subsonicService.getCoverArtUrl(coverArtId, size: 600);
+
+    // 3. Fall back to Subsonic server URL (works online only)
+    // Skip in offline mode: the request will always fail and the iOS plugin
+    // would fire a URLSession call on every 1-second position update.
+    if (!_offlineService.isOfflineMode) {
+      _resolvedArtworkUrl = serverUrl;
+      if (_currentSong?.id == song.id) _updateAllServices();
+    }
+  }
+
   void _updateAndroidAuto() {
     if (_currentSong == null) return;
 
-    final artworkUrl = _currentSong!.coverArt != null
-        ? (_currentSong!.isLocal
-              ? Uri.file(_currentSong!.coverArt!).toString()
-              : _subsonicService.getCoverArtUrl(
-                  _currentSong!.coverArt!,
-                  size: 300,
-                ))
-        : null;
+    final artworkUrl = _resolveArtworkUrl();
+    // Use song metadata duration as fallback when just_audio hasn't reported it yet
+    final effectiveDuration = _duration.inMilliseconds > 0
+        ? _duration
+        : Duration(seconds: _currentSong!.duration ?? 0);
 
     _androidAutoService.updatePlaybackState(
       songId: _currentSong!.id,
@@ -324,7 +588,7 @@ class PlayerProvider extends ChangeNotifier {
       artist: _currentSong!.artist ?? '',
       album: _currentSong!.album ?? '',
       artworkUrl: artworkUrl,
-      duration: _duration,
+      duration: effectiveDuration,
       position: _position,
       isPlaying: _isPlaying,
     );
@@ -336,19 +600,16 @@ class PlayerProvider extends ChangeNotifier {
   void _updateAllServices() {
     if (_currentSong == null) return;
 
-    final artworkUrl = _currentSong!.coverArt != null
-        ? (_currentSong!.isLocal
-              ? Uri.file(_currentSong!.coverArt!).toString()
-              : _subsonicService.getCoverArtUrl(
-                  _currentSong!.coverArt!,
-                  size: 300,
-                ))
-        : null;
+    final artworkUrl = _resolveArtworkUrl();
+    // Use song metadata duration as fallback when just_audio hasn't reported it yet
+    final effectiveDuration = _duration.inMilliseconds > 0
+        ? _duration
+        : Duration(seconds: _currentSong!.duration ?? 0);
 
     _androidSystemService.updateFromSong(
       song: _currentSong!,
       artworkUrl: artworkUrl,
-      duration: _duration,
+      duration: effectiveDuration,
       position: _position,
       isPlaying: _isPlaying,
       currentIndex: _currentIndex,
@@ -358,7 +619,7 @@ class PlayerProvider extends ChangeNotifier {
     _windowsService.updatePlaybackState(
       song: _currentSong!,
       artworkUrl: artworkUrl,
-      duration: _duration,
+      duration: effectiveDuration,
       position: _position,
       isPlaying: _isPlaying,
     );
@@ -366,7 +627,7 @@ class PlayerProvider extends ChangeNotifier {
     _bluetoothService.updateFromSong(
       song: _currentSong!,
       artworkUrl: artworkUrl,
-      duration: _duration,
+      duration: effectiveDuration,
       position: _position,
       isPlaying: _isPlaying,
       currentIndex: _currentIndex,
@@ -377,7 +638,7 @@ class PlayerProvider extends ChangeNotifier {
       _samsungService.updateFromSong(
         song: _currentSong!,
         artworkUrl: artworkUrl,
-        duration: _duration,
+        duration: effectiveDuration,
         position: _position,
         isPlaying: _isPlaying,
       );
@@ -414,6 +675,34 @@ class PlayerProvider extends ChangeNotifier {
     return _position.inMilliseconds / _duration.inMilliseconds;
   }
 
+  // https://github.com/dddevid/Musly/issues/72 — sleep timer getters & setter
+  bool get hasSleepTimer => _sleepTimer != null;
+
+  Duration? get sleepTimerRemaining {
+    if (_sleepTimerEnd == null) return null;
+    final remaining = _sleepTimerEnd!.difference(DateTime.now());
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  /// Set a sleep timer that pauses playback after [duration].
+  /// Pass [Duration.zero] to cancel an active timer.
+  void setSleepTimer(Duration duration) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepTimerEnd = null;
+
+    if (duration > Duration.zero) {
+      _sleepTimerEnd = DateTime.now().add(duration);
+      _sleepTimer = Timer(duration, () {
+        pause();
+        _sleepTimer = null;
+        _sleepTimerEnd = null;
+        notifyListeners();
+      });
+    }
+    notifyListeners();
+  }
+
   void _initializePlayer() {
     // Load persisted volume
     _storageService.getVolume().then((savedVolume) {
@@ -439,7 +728,7 @@ class PlayerProvider extends ChangeNotifier {
           _onSongComplete();
         }
 
-        if (wasPlaying != _isPlaying) {
+        if (wasPlaying != _isPlaying && !_reactivatingSession) {
           notifyListeners();
           _updateAndroidAuto();
         }
@@ -576,8 +865,13 @@ class PlayerProvider extends ChangeNotifier {
       }
 
       _currentSong = song;
+      _resolvedArtworkUrl = null; // reset; _refreshArtworkUrl() will populate it
       _position = Duration.zero;
       notifyListeners();
+
+      // Resolve artwork URL before starting playback so the first Now Playing
+      // update includes the correct artwork (file, cache, or server URL).
+      await _refreshArtworkUrl();
 
       if (_castService.isConnected) {
         if (_audioPlayer.playing) await _audioPlayer.stop();
@@ -666,9 +960,20 @@ class PlayerProvider extends ChangeNotifier {
 
       // Only scrobble for server tracks
       if (song.isLocal != true) {
-        _subsonicService.scrobble(song.id, submission: false).catchError((e) {
+        if (_offlineService.isOfflineMode) {
+          // In offline mode, queue directly without attempting the network call.
           _offlineService.queueScrobble(song.id, submission: false);
-        });
+        } else {
+          _subsonicService.scrobble(song.id, submission: false).catchError((e) {
+            _offlineService.queueScrobble(song.id, submission: false);
+          });
+
+          // https://github.com/dddevid/Musly/issues/64
+          // We're clearly online — flush any previously queued offline scrobbles.
+          _offlineService.flushPendingScrobbles(_subsonicService).catchError((e) {
+            debugPrint('Scrobble flush failed: $e');
+          });
+        }
       }
 
       if (_recommendationService != null) {
@@ -1097,8 +1402,55 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  /// Re-activates the iOS AVAudioSession after the NowPlayingScreen is dismissed.
+  /// Called from main_screen.dart because volume_controller's onCancel handler
+  /// calls audioSession.setActive(false), which stops just_audio playback.
+  Future<void> reactivateAudioSession() async {
+    // Capture intended playing state before any async calls, because
+    // just_audio may or may not have updated _isPlaying by this point.
+    final wasPlaying = _isPlaying;
+
+    await _androidSystemService.requestAudioFocus();
+
+    // Always re-push Now Playing metadata after reactivating the audio session.
+    // volume_controller's AVAudioSession.setActive(false) can clear the iOS
+    // Control Center / Lock Screen info. When the song is paused just_audio
+    // emits no positionStream events, so the normal 1-second refresh won't fire.
+    // Calling _updateAllServices() here guarantees info is always restored,
+    // regardless of whether the song was playing or paused.
+    if (_currentSong != null) {
+      _updateAllServices();
+    }
+
+    if (wasPlaying && !_castService.isConnected && !_upnpService.isConnected) {
+      // volume_controller deactivates the AVAudioSession without notifying
+      // just_audio, so just_audio still believes playing == true and
+      // calling play() on it is a no-op.
+      // Force a full restart by pausing first (syncing just_audio's state)
+      // then resuming, so just_audio re-establishes audio output properly.
+      //
+      // Suppress playerStateStream notifications during the pause→play cycle
+      // to avoid visual micro-stutters (progress bar / button flickering).
+      // The audio session was already deactivated, so pause() has no audible
+      // effect — it only syncs just_audio's internal state.
+      _reactivatingSession = true;
+      try {
+        await _audioPlayer.pause();
+        await _audioPlayer.play();
+      } finally {
+        _reactivatingSession = false;
+        notifyListeners();
+        // Re-push metadata + playing state to the iOS Now Playing info center
+        // (and all other system services). Covers any state change during the
+        // pause→play cycle that the early _updateAllServices() didn't capture.
+        _updateAndroidAuto();
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _sleepTimer?.cancel();
     _castService.removeListener(_onCastStateChanged);
     _upnpService.removeListener(_onUpnpStateChanged);
     _audioPlayer.dispose();
@@ -1110,6 +1462,20 @@ class PlayerProvider extends ChangeNotifier {
     // Discord RPC typically doesn't need explicit disposal if app closes, but we can clear presence
     _discordRpcService.shutdown();
     super.dispose();
+  }
+
+  // https://github.com/dddevid/Musly/issues/69
+  // Returns the `state` line text for Discord RPC based on user preference.
+  String _discordStateText() {
+    switch (_discordRpcStateStyle) {
+      case 'song_title':
+        return _currentSong?.title ?? 'Unknown Song';
+      case 'app_name':
+        return 'Musly';
+      case 'artist':
+      default:
+        return _currentSong?.artist ?? 'Unknown Artist';
+    }
   }
 
   void _updateDiscordRpc() {
@@ -1124,11 +1490,11 @@ class PlayerProvider extends ChangeNotifier {
         ? startTimestamp + _duration.inMilliseconds
         : null;
 
-    final currentSongTitle = _currentSong?.title;
+    final stateText = _discordStateText();
 
     // Initial update with placeholder
     _discordRpcService.updatePresence(
-      state: _currentSong!.artist ?? 'Unknown Artist',
+      state: stateText,
       details: _currentSong!.title,
       largeImageKey: 'musly_logo',
       largeImageText: _currentSong!.album,
@@ -1138,75 +1504,6 @@ class PlayerProvider extends ChangeNotifier {
       endTime: endTimestamp,
     );
 
-    // Fetch public cover art asynchronously
-    _fetchPublicCoverArt(_currentSong!.artist ?? '', _currentSong!.title).then((
-      artworkUrl,
-    ) {
-      if (artworkUrl != null && _currentSong?.title == currentSongTitle) {
-        _discordRpcService.updatePresence(
-          state: _currentSong!.artist ?? 'Unknown Artist',
-          details: _currentSong!.title,
-          largeImageKey: artworkUrl,
-          largeImageText: _currentSong!.album,
-          smallImageKey: 'musly_logo',
-          smallImageText: _isPlaying ? 'Playing' : 'Paused',
-          startTime: startTimestamp,
-          endTime: endTimestamp,
-        );
-      }
-    });
-  }
-
-  Future<String?> _fetchPublicCoverArt(String artist, String title) async {
-    try {
-      final dio = Dio();
-
-      // Clean artist name: take text before first separator
-      String cleanArtist = artist.split(RegExp(r'[\\/,;&]')).first.trim();
-
-      // Search by Artist and Title (more precise for specific songs)
-      final searchTerm = '$cleanArtist $title';
-      debugPrint('Fetching cover art for: $searchTerm');
-
-      final term = Uri.encodeComponent(searchTerm);
-      final response = await dio.get(
-        'https://itunes.apple.com/search?term=$term&entity=song&limit=5',
-      );
-
-      if (response.statusCode == 200) {
-        dynamic data = response.data;
-        if (data is String) {
-          try {
-            data = jsonDecode(data);
-          } catch (e) {
-            debugPrint('Error decoding JSON from iTunes: $e');
-            return null;
-          }
-        }
-
-        if (data is Map && data['resultCount'] > 0) {
-          List results = data['results'];
-
-          // Filter results to find a good match for the artist
-          var match = results.firstWhere(
-            (r) => r['artistName'].toString().toLowerCase().contains(
-              cleanArtist.toLowerCase(),
-            ),
-            orElse: () => results.first,
-          );
-
-          String artworkUrl = match['artworkUrl100'];
-          final hqUrl = artworkUrl.replaceAll('100x100bb', '600x600bb');
-          debugPrint('Found cover art URL: $hqUrl');
-          return hqUrl;
-        } else {
-          debugPrint('No cover art found for: $searchTerm');
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching public cover art: $e');
-    }
-    return null;
   }
 
   Future<void> setDiscordRpcEnabled(bool enabled) async {
@@ -1217,6 +1514,22 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   bool get discordRpcEnabled => _discordRpcService.enabled;
+
+  // https://github.com/dddevid/Musly/issues/69
+  String _discordRpcStateStyle = 'artist';
+
+  Future<void> loadDiscordRpcStateStyle() async {
+    _discordRpcStateStyle = await _storageService.getDiscordRpcStateStyle();
+  }
+
+  Future<void> setDiscordRpcStateStyle(String style) async {
+    _discordRpcStateStyle = style;
+    await _storageService.saveDiscordRpcStateStyle(style);
+    _updateDiscordRpc();
+    notifyListeners();
+  }
+
+  String get discordRpcStateStyle => _discordRpcStateStyle;
 
   void _onCastStateChanged() {
     notifyListeners();

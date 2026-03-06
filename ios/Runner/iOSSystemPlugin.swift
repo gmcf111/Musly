@@ -25,6 +25,10 @@ public class iOSSystemPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     private var currentArtist: String = ""
     private var isPlaying: Bool = false
     
+    // Cached artwork to avoid re-fetching on every 1-second position update
+    private var lastLoadedArtworkUrl: String?
+    private var lastLoadedArtwork: MPMediaItemArtwork?
+    
     public static func register(with registrar: FlutterPluginRegistrar) {
         let instance = iOSSystemPlugin()
         
@@ -217,7 +221,21 @@ public class iOSSystemPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             name: AVAudioSession.routeChangeNotification,
             object: audioSession
         )
+
+        // CARPLAY SUPPORT TEMPORARILY DISABLED
+        // @objc handlers and observers below are commented out until the
+        // com.apple.developer.carplay-audio entitlement is approved by Apple.
+        //
+        // NotificationCenter.default.addObserver(self, selector: #selector(handleCarPlayTogglePlayPause), name: .muslyCarPlayTogglePlayPause, object: nil)
+        // NotificationCenter.default.addObserver(self, selector: #selector(handleCarPlaySkipNext), name: .muslyCarPlaySkipNext, object: nil)
+        // NotificationCenter.default.addObserver(self, selector: #selector(handleCarPlaySkipPrevious), name: .muslyCarPlaySkipPrevious, object: nil)
     }
+
+    // @objc private func handleCarPlayTogglePlayPause() {
+    //     if isPlaying { sendEvent("pause", data: nil) } else { sendEvent("play", data: nil) }
+    // }
+    // @objc private func handleCarPlaySkipNext() { sendEvent("skipNext", data: nil) }
+    // @objc private func handleCarPlaySkipPrevious() { sendEvent("skipPrevious", data: nil) }
     
     @objc private func handleAudioSessionInterruption(notification: Notification) {
         guard let userInfo = notification.userInfo,
@@ -298,31 +316,51 @@ public class iOSSystemPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         }
         
         if let artworkUrl = artworkUrl, let url = URL(string: artworkUrl) {
-            loadArtwork(from: url) { [weak self] artwork in
-                var info = nowPlayingInfo
-                if let artwork = artwork {
+            if artworkUrl == lastLoadedArtworkUrl, let cached = lastLoadedArtwork {
+                // Same URL: reuse cached artwork — avoids re-fetching on every 1-second position tick
+                nowPlayingInfo[MPMediaItemPropertyArtwork] = cached
+                nowPlayingCenter.nowPlayingInfo = nowPlayingInfo
+            } else {
+                // New artwork URL: set text metadata immediately, then load artwork async
+                lastLoadedArtworkUrl = artworkUrl
+                lastLoadedArtwork = nil
+                nowPlayingCenter.nowPlayingInfo = nowPlayingInfo
+                loadArtwork(from: url) { [weak self] artwork in
+                    guard let artwork = artwork else { return }
+                    self?.lastLoadedArtwork = artwork
+                    var info = self?.nowPlayingCenter.nowPlayingInfo ?? nowPlayingInfo
                     info[MPMediaItemPropertyArtwork] = artwork
+                    self?.nowPlayingCenter.nowPlayingInfo = info
                 }
-                self?.nowPlayingCenter.nowPlayingInfo = info
             }
         } else {
+            lastLoadedArtworkUrl = nil
+            lastLoadedArtwork = nil
             nowPlayingCenter.nowPlayingInfo = nowPlayingInfo
         }
     }
     
     private func loadArtwork(from url: URL, completion: @escaping (MPMediaItemArtwork?) -> Void) {
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            guard let data = data, error == nil, let image = UIImage(data: data) else {
-                completion(nil)
-                return
+        if url.isFileURL {
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard let data = try? Data(contentsOf: url),
+                      let image = UIImage(data: data) else {
+                    DispatchQueue.main.async { completion(nil) }
+                    return
+                }
+                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                DispatchQueue.main.async { completion(artwork) }
             }
-            
-            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-            
-            DispatchQueue.main.async {
-                completion(artwork)
-            }
-        }.resume()
+        } else {
+            URLSession.shared.dataTask(with: url) { data, response, error in
+                guard let data = data, error == nil, let image = UIImage(data: data) else {
+                    DispatchQueue.main.async { completion(nil) }
+                    return
+                }
+                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                DispatchQueue.main.async { completion(artwork) }
+            }.resume()
+        }
     }
     
     private func requestAudioFocus() -> Bool {

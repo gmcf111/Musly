@@ -69,7 +69,8 @@ class CastService extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
-    // Listen to session changes
+    // On iOS, Cast is replaced by native AirPlay — never initialize the SDK.
+    if (Platform.isIOS) return;
     _sessionSubscription = _sessionManager.currentSessionStream.listen((
       session,
     ) {

@@ -91,6 +91,9 @@
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService"/>
             </intent-filter>
+            <meta-data
+                android:name="android.media.browse.SEARCH_SUPPORTED"
+                android:value="true"/>
         </service>
         
         <!-- Media Button Receiver -->

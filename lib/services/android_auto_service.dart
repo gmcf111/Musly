@@ -34,6 +34,8 @@ class AndroidAutoService {
   onGetArtistAlbums;
   Future<List<Map<String, String>>> Function(String playlistId)?
   onGetPlaylistSongs;
+  Future<List<Map<String, String>>> Function(String query)? onSearch;
+  Function(String query)? onPlayFromSearch;
 
   Future<void> initialize() async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
@@ -109,6 +111,18 @@ class AndroidAutoService {
           _handleGetPlaylistSongs(playlistId);
         }
         break;
+      case 'search':
+        final query = event['query'] as String?;
+        if (query != null) {
+          _handleSearch(query);
+        }
+        break;
+      case 'playFromSearch':
+        final searchQuery = event['query'] as String?;
+        if (searchQuery != null) {
+          onPlayFromSearch?.call(searchQuery);
+        }
+        break;
     }
   }
 
@@ -148,6 +162,23 @@ class AndroidAutoService {
       });
     } catch (e) {
       debugPrint('Error getting playlist songs: $e');
+    }
+  }
+
+  Future<void> _handleSearch(String query) async {
+    if (onSearch == null) return;
+    try {
+      final songs = await onSearch!(query);
+      await _methodChannel.invokeMethod('updateSearchResults', {
+        'query': query,
+        'songs': songs,
+      });
+    } catch (e) {
+      debugPrint('Error handling Android Auto search: $e');
+      await _methodChannel.invokeMethod('updateSearchResults', {
+        'query': query,
+        'songs': <Map<String, String>>[],
+      });
     }
   }
 

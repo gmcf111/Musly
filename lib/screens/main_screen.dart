@@ -88,6 +88,7 @@ class _MainScreenState extends State<MainScreen> {
         // so that any previously-loaded local songs are cleared before the
         // server library is fetched.
         libraryProvider.setLocalOnlyMode(false);
+        libraryProvider.setServerOfflineMode(widget.isOfflineMode);
         libraryProvider.initialize();
       }
 
@@ -281,11 +282,14 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  // https://github.com/dddevid/Musly/issues/73
+  // Opaque route avoids the double-render compositing that caused grey screens
+  // on low-memory / small-screen devices (e.g. Sony NW-A306).
   void _openNowPlaying() {
     Navigator.of(context).push(
       PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.transparent,
+        opaque: true,
+        barrierColor: Colors.black,
         pageBuilder: (context, animation, secondaryAnimation) {
           return const NowPlayingScreen();
         },
@@ -306,7 +310,19 @@ class _MainScreenState extends State<MainScreen> {
         },
         transitionDuration: const Duration(milliseconds: 400),
       ),
-    );
+    ).then((_) async {
+      // On iOS, volume_controller's VolumeListener.onCancel() calls
+      // AVAudioSession.setActive(false) when the NowPlayingScreen's volume
+      // slider widget is disposed, stopping just_audio playback.
+      // We wait one frame so the dispose() completes before re-activating.
+      if (!mounted) return;
+      if (Platform.isIOS) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        if (!mounted) return;
+        Provider.of<PlayerProvider>(context, listen: false)
+            .reactivateAudioSession();
+      }
+    });
   }
 
   bool get _isDesktop {

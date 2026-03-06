@@ -53,12 +53,14 @@ public class SwiftGoogleCastPlugin:GCKCastContext, GCKLoggerDelegate, FlutterPlu
     private func setSharedInstanceWithOption(arguments: Dictionary<String, Any> ,result: @escaping FlutterResult){
         let option = GCKCastOptions.fromMap(arguments)
         GCKCastContext.setSharedInstanceWith(option)
-        GCKLogger.sharedInstance().consoleLoggingEnabled = true
+        GCKLogger.sharedInstance().consoleLoggingEnabled = false
         GCKLogger.sharedInstance().delegate = self
         discoveryManager.add(FGCDiscoveryManagerMethodChannel.instance)
-        sessionManager.add(FGCSessionManagerMethodChannel.instance )
-        discoveryManager.startDiscovery()
-
+        sessionManager.add(FGCSessionManagerMethodChannel.instance)
+        // Do NOT call discoveryManager.startDiscovery() here.
+        // Discovery is started/stopped from Dart (cast_button.dart) only while
+        // the device-picker dialog is open, preventing continuous background
+        // mDNS scanning that heats the device in idle.
     }
     
     
@@ -68,10 +70,13 @@ public class SwiftGoogleCastPlugin:GCKCastContext, GCKLoggerDelegate, FlutterPlu
                       at level: GCKLoggerLevel,
                       fromFunction function: String,
                       location: String) {
-
-          print(function + " - " + message)
-        
-      }
+        // Suppress Cast SDK verbose logging in release; keep for debug builds.
+        #if DEBUG
+        if level == .error || level == .warning {
+            print("[Cast] " + function + " - " + message)
+        }
+        #endif
+    }
     
   
 

@@ -38,6 +38,7 @@ class MusicService : MediaBrowserServiceCompat() {
         const val MEDIA_ID_ALBUMS = "ALBUMS"
         const val MEDIA_ID_ARTISTS = "ARTISTS"
         const val MEDIA_ID_PLAYLISTS = "PLAYLISTS"
+        const val MEDIA_ID_SEARCH = "SEARCH"
         
         @Volatile
         private var instance: MusicService? = null
@@ -73,6 +74,7 @@ class MusicService : MediaBrowserServiceCompat() {
     private val pendingAlbumResults = mutableMapOf<String, Result<MutableList<MediaBrowserCompat.MediaItem>>>()
     private val pendingArtistResults = mutableMapOf<String, Result<MutableList<MediaBrowserCompat.MediaItem>>>()
     private val pendingPlaylistResults = mutableMapOf<String, Result<MutableList<MediaBrowserCompat.MediaItem>>>()
+    private val pendingSearchResults = mutableMapOf<String, Result<MutableList<MediaBrowserCompat.MediaItem>>>()
 
     override fun onCreate() {
         super.onCreate()
@@ -83,6 +85,10 @@ class MusicService : MediaBrowserServiceCompat() {
         initializeMediaSession()
 
         showIdleNotification()
+
+        // Deliver any library data that was sent to AndroidAutoPlugin before this
+        // service finished starting (race condition at app launch).
+        AndroidAutoPlugin.flushPendingLibraryData()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -159,7 +165,8 @@ class MusicService : MediaBrowserServiceCompat() {
                     PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
                     PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                     PlaybackStateCompat.ACTION_SEEK_TO or
-                    PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID
+                    PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID or
+                    PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH
                 )
             
             setPlaybackState(stateBuilder.build())
@@ -177,6 +184,34 @@ class MusicService : MediaBrowserServiceCompat() {
         rootHints: Bundle?
     ): BrowserRoot {
         return BrowserRoot(MEDIA_ID_ROOT, null)
+    }
+
+    override fun onSearch(
+        query: String,
+        extras: Bundle?,
+        result: Result<MutableList<MediaBrowserCompat.MediaItem>>
+    ) {
+        result.detach()
+        pendingSearchResults[query] = result
+        AndroidAutoPlugin.sendCommand("search", mapOf("query" to query))
+        // Timeout after 10 seconds to avoid hanging the UI
+        serviceScope.launch {
+            delay(10000)
+            pendingSearchResults.remove(query)?.sendResult(mutableListOf())
+        }
+    }
+
+    fun updateSearchResults(query: String, songs: List<Map<String, Any>>) {
+        val items = songs.map { song ->
+            createPlayableMediaItem(
+                song["id"] as? String ?: "",
+                song["title"] as? String ?: "",
+                song["artist"] as? String ?: "",
+                song["album"] as? String ?: "",
+                song["artworkUrl"] as? String
+            )
+        }.toMutableList()
+        pendingSearchResults.remove(query)?.sendResult(items)
     }
 
     override fun onLoadChildren(
@@ -637,6 +672,11 @@ class MusicService : MediaBrowserServiceCompat() {
             mediaId?.let {
                 AndroidAutoPlugin.sendCommand("playFromMediaId", mapOf("mediaId" to it))
             }
+        }
+
+        override fun onPlayFromSearch(query: String?, extras: Bundle?) {
+            val q = query?.trim() ?: ""
+            AndroidAutoPlugin.sendCommand("playFromSearch", mapOf("query" to q))
         }
     }
 

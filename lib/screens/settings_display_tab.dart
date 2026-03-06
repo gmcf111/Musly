@@ -75,7 +75,12 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
             _buildVolumeSliderToggle(),
             _buildDivider(),
             _buildStarRatingsToggle(),
-            if (_isDesktop) ...[_buildDivider(), _buildDiscordRpcToggle()],
+            if (_isDesktop) ...[
+              _buildDivider(),
+              _buildDiscordRpcToggle(),
+              _buildDivider(),
+              _buildDiscordRpcStateStyleSelector(),
+            ],
           ],
         ),
         const SizedBox(height: 24),
@@ -759,6 +764,63 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
               await player.setDiscordRpcEnabled(value);
               // Force rebuild to update switch state since provider might not notify
               setState(() {});
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  // https://github.com/dddevid/Musly/issues/69
+  Widget _buildDiscordRpcStateStyleSelector() {
+    const styles = [
+      ('artist', 'Artist name'),
+      ('song_title', 'Song title'),
+      ('app_name', 'App name (Musly)'),
+    ];
+    return Consumer<PlayerProvider>(
+      builder: (context, player, _) {
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
+          leading: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFF5865F2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              CupertinoIcons.text_bubble,
+              color: Colors.white,
+              size: 18,
+            ),
+          ),
+          title: const Text('Discord status text', style: TextStyle(fontSize: 16)),
+          subtitle: Text(
+            'Second line shown in Discord activity',
+            style: TextStyle(
+              fontSize: 13,
+              color: _isDark
+                  ? AppTheme.darkSecondaryText
+                  : AppTheme.lightSecondaryText,
+            ),
+          ),
+          trailing: DropdownButton<String>(
+            value: player.discordRpcStateStyle,
+            underline: const SizedBox.shrink(),
+            items: styles
+                .map(
+                  (s) => DropdownMenuItem(
+                    value: s.$1,
+                    child: Text(s.$2, style: const TextStyle(fontSize: 14)),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) player.setDiscordRpcStateStyle(value);
             },
           ),
         );

@@ -918,6 +918,19 @@ class _PlayerHeader extends StatelessWidget {
                     size: 24,
                   ),
                 ),
+              // https://github.com/dddevid/Musly/issues/72 — sleep timer
+              Selector<PlayerProvider, bool>(
+                selector: (_, p) => p.hasSleepTimer,
+                builder: (context, hasTimer, _) => IconButton(
+                  tooltip: hasTimer ? 'Sleep timer active' : 'Sleep timer',
+                  onPressed: () => _showSleepTimerDialog(context),
+                  icon: Icon(
+                    CupertinoIcons.moon_zzz,
+                    color: hasTimer ? AppTheme.appleMusicRed : Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
               IconButton(
                 onPressed: () => _showQueue(context),
                 icon: const Icon(
@@ -931,6 +944,88 @@ class _PlayerHeader extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  // https://github.com/dddevid/Musly/issues/72
+  void _showSleepTimerDialog(BuildContext context) {
+    final player = context.read<PlayerProvider>();
+
+    final options = const [
+      ('15 min', Duration(minutes: 15)),
+      ('30 min', Duration(minutes: 30)),
+      ('45 min', Duration(minutes: 45)),
+      ('1 hour', Duration(hours: 1)),
+      ('2 hours', Duration(hours: 2)),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        decoration: BoxDecoration(
+          color: AppTheme.darkSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppTheme.darkDivider,
+                borderRadius: BorderRadius.circular(2.5),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Sleep Timer',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...options.map(
+              (opt) => ListTile(
+                title: Text(
+                  opt.$1,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  player.setSleepTimer(opt.$2);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Sleep timer set for ${opt.$1}'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (player.hasSleepTimer)
+              ListTile(
+                leading: const Icon(
+                  CupertinoIcons.xmark_circle,
+                  color: AppTheme.appleMusicRed,
+                ),
+                title: const Text(
+                  'Cancel timer',
+                  style: TextStyle(color: AppTheme.appleMusicRed),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  player.setSleepTimer(Duration.zero);
+                },
+              ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -1121,15 +1216,29 @@ class _PlayerControlsState extends State<_PlayerControls> {
             },
           ),
 
-          Selector<PlayerProvider, (double, Duration, Duration)>(
-            selector: (_, p) => (p.progress, p.position, p.duration),
-            builder: (context, data, _) {
-              final (progress, position, duration) = data;
-              return _ProgressBar(
-                progress: progress,
-                position: position,
-                duration: duration,
-                formatDuration: widget.formatDuration,
+          // https://github.com/dddevid/Musly/issues/70
+          // Use StreamBuilder so the progress bar updates on every audio
+          // position tick, regardless of Selector equality comparisons.
+          Selector<PlayerProvider, Duration>(
+            selector: (_, p) => p.duration,
+            builder: (context, duration, _) {
+              final provider = context.read<PlayerProvider>();
+              return StreamBuilder<Duration>(
+                stream: provider.positionStream,
+                initialData: provider.position,
+                builder: (context, snapshot) {
+                  final pos = snapshot.data ?? Duration.zero;
+                  final progress = duration.inMilliseconds > 0
+                      ? (pos.inMilliseconds / duration.inMilliseconds)
+                          .clamp(0.0, 1.0)
+                      : 0.0;
+                  return _ProgressBar(
+                    progress: progress,
+                    position: pos,
+                    duration: duration,
+                    formatDuration: widget.formatDuration,
+                  );
+                },
               );
             },
           ),
@@ -1522,6 +1631,10 @@ class _SongInfoState extends State<_SongInfo> {
     }
   }
 
+  // https://github.com/dddevid/Musly/issues/76
+  // The bottom-sheet builder shadows `context` with its own parameter;
+  // capture the outer context before entering the builder so that
+  // _showCreatePlaylistDialog receives a valid context after the sheet pops.
   Future<void> _showAddToPlaylistDialog(BuildContext context) async {
     if (widget.song == null) return;
 
@@ -1535,10 +1648,13 @@ class _SongInfoState extends State<_SongInfo> {
 
       if (!context.mounted) return;
 
+      // Capture outer context BEFORE the builder shadows the variable.
+      final outerContext = context;
+
       showModalBottomSheet(
-        context: context,
+        context: outerContext,
         backgroundColor: Colors.transparent,
-        builder: (context) => Container(
+        builder: (sheetContext) => Container(
           decoration: BoxDecoration(
             color: AppTheme.darkSurface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -1573,8 +1689,8 @@ class _SongInfoState extends State<_SongInfo> {
                   borderRadius: BorderRadius.circular(8),
                   child: InkWell(
                     onTap: () {
-                      Navigator.pop(context);
-                      _showCreatePlaylistDialog(context);
+                      Navigator.pop(sheetContext);
+                      _showCreatePlaylistDialog(outerContext);
                     },
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
@@ -1688,9 +1804,9 @@ class _SongInfoState extends State<_SongInfo> {
                             )
                           : null,
                       onTap: () async {
-                        Navigator.pop(context);
+                        Navigator.pop(sheetContext);
                         await _addToPlaylist(
-                          context,
+                          outerContext,
                           playlist.id,
                           playlist.name,
                         );
@@ -2138,6 +2254,14 @@ class _VolumeSliderState extends State<_VolumeSlider> {
   double _dragValue = 0.0;
   double _systemVolume = 0.5;
   StreamSubscription<double>? _volumeSubscription;
+  // Captured in didChangeDependencies so it's safe to use in dispose().
+  PlayerProvider? _playerProvider;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _playerProvider = context.read<PlayerProvider>();
+  }
 
   @override
   void initState() {
@@ -2163,6 +2287,17 @@ class _VolumeSliderState extends State<_VolumeSlider> {
   @override
   void dispose() {
     _volumeSubscription?.cancel();
+    // On iOS, volume_controller's onCancel() internally calls
+    // AVAudioSession.setActive(false), which stops just_audio.
+    // Use the pre-captured provider reference — context is unsafe here.
+    if (Platform.isIOS) {
+      final player = _playerProvider;
+      if (player != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          player.reactivateAudioSession();
+        });
+      }
+    }
     super.dispose();
   }
 

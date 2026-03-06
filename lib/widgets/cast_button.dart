@@ -1,4 +1,5 @@
 ﻿import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../services/cast_service.dart';
 import '../services/upnp_service.dart';
 import '../theme/app_theme.dart';
+import 'airplay_button.dart';
 
 class CastButton extends StatelessWidget {
   final Color? iconColor;
@@ -15,6 +17,14 @@ class CastButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // On iOS, replace Cast/UPnP with native AirPlay picker.
+    if (Platform.isIOS) {
+      return AirPlayButton(
+        tintColor: iconColor ?? Colors.white,
+        size: iconSize,
+      );
+    }
+
     final castState = context.select<CastService, CastState>((s) => s.state);
     final upnpConnected = context.select<UpnpService, bool>(
       (s) => s.isConnected,
