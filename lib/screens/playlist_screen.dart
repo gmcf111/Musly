@@ -26,6 +26,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   Playlist? _playlist;
   bool _isLoading = true;
   bool _isDownloading = false;
+  bool _isSelecting = false;
+  final Set<int> _selectedIndices = {};
 
   @override
   void initState() {
@@ -104,6 +106,108 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
   }
 
+  void _toggleSelectMode() {
+    setState(() {
+      _isSelecting = !_isSelecting;
+      _selectedIndices.clear();
+    });
+  }
+
+  void _toggleSelection(int index) {
+    setState(() {
+      if (_selectedIndices.contains(index)) {
+        _selectedIndices.remove(index);
+      } else {
+        _selectedIndices.add(index);
+      }
+    });
+  }
+
+  void _toggleSelectAll() {
+    final songCount = _playlist?.songs?.length ?? 0;
+    setState(() {
+      if (_selectedIndices.length == songCount) {
+        _selectedIndices.clear();
+      } else {
+        _selectedIndices.addAll(List.generate(songCount, (i) => i));
+      }
+    });
+  }
+
+  Future<void> _removeSelected() async {
+    if (_selectedIndices.isEmpty) return;
+    final count = _selectedIndices.length;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove songs'),
+        content: Text(
+          'Remove $count ${count == 1 ? 'song' : 'songs'} from this playlist?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final subsonicService = Provider.of<SubsonicService>(
+      context,
+      listen: false,
+    );
+
+    // Sort descending so we can remove from end first without shifting indices
+    final sortedIndices = _selectedIndices.toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    try {
+      await subsonicService.updatePlaylist(
+        playlistId: widget.playlistId,
+        songIndexesToRemove: sortedIndices,
+      );
+      setState(() {
+        final updatedSongs = List<Song>.from(_playlist!.songs!);
+        for (final idx in sortedIndices) {
+          updatedSongs.removeAt(idx);
+        }
+        _playlist = _playlist!.copyWith(
+          songCount: updatedSongs.length,
+          songs: updatedSongs,
+        );
+        _selectedIndices.clear();
+        _isSelecting = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$count ${count == 1 ? 'song' : 'songs'} removed from playlist',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error removing songs: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _downloadPlaylist() async {
     final songs = _playlist?.songs;
     if (songs == null || songs.isEmpty) return;
@@ -167,21 +271,53 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_playlist!.name),
+        title: _isSelecting
+            ? Text('${_selectedIndices.length} selected')
+            : Text(_playlist!.name),
+        leading: _isSelecting
+            ? IconButton(
+                icon: const Icon(CupertinoIcons.xmark),
+                onPressed: _toggleSelectMode,
+              )
+            : null,
         actions: [
-          if (!isOffline)
-            
+          if (_isSelecting) ...[
             IconButton(
-              tooltip: 'Download playlist',
-              onPressed: _isDownloading ? null : _downloadPlaylist,
-              icon: _isDownloading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(CupertinoIcons.cloud_download),
+              tooltip: _selectedIndices.length == (_playlist?.songs?.length ?? 0)
+                  ? 'Deselect all'
+                  : 'Select all',
+              icon: Icon(
+                _selectedIndices.length == (_playlist?.songs?.length ?? 0)
+                    ? CupertinoIcons.checkmark_square
+                    : CupertinoIcons.square,
+              ),
+              onPressed: _toggleSelectAll,
             ),
+            IconButton(
+              tooltip: 'Remove selected',
+              icon: const Icon(CupertinoIcons.trash),
+              color: _selectedIndices.isNotEmpty ? Colors.red : null,
+              onPressed: _selectedIndices.isNotEmpty ? _removeSelected : null,
+            ),
+          ] else ...[
+            IconButton(
+              tooltip: 'Select songs',
+              icon: const Icon(CupertinoIcons.checkmark_circle),
+              onPressed: _toggleSelectMode,
+            ),
+            if (!isOffline)
+              IconButton(
+                tooltip: 'Download playlist',
+                onPressed: _isDownloading ? null : _downloadPlaylist,
+                icon: _isDownloading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(CupertinoIcons.cloud_download),
+              ),
+          ],
         ],
       ),
       body: Column(
@@ -268,7 +404,54 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                     itemCount: _playlist!.songs!.length,
                     itemBuilder: (context, index) {
                       final song = _playlist!.songs![index];
-                      
+                      final isSelected = _selectedIndices.contains(index);
+
+                      final tile = SongTile(
+                        song: song,
+                        playlist: _playlist!.songs,
+                        index: index,
+                        showArtist: true,
+                        onTap: _isSelecting
+                            ? () => _toggleSelection(index)
+                            : null,
+                        onLongPress: _isSelecting
+                            ? null
+                            : () {
+                                _toggleSelectMode();
+                                _toggleSelection(index);
+                              },
+                      );
+
+                      if (_isSelecting) {
+                        return CheckboxListTile(
+                          key: ValueKey('sel_${song.id}_$index'),
+                          value: isSelected,
+                          onChanged: (_) => _toggleSelection(index),
+                          activeColor: AppTheme.appleMusicRed,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: const EdgeInsets.only(left: 4, right: 16),
+                          title: Text(
+                            song.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            song.artist ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          secondary: IconButton(
+                            icon: const Icon(CupertinoIcons.trash, size: 20),
+                            color: Colors.red,
+                            tooltip: 'Remove from playlist',
+                            onPressed: () async {
+                              setState(() => _selectedIndices.remove(index));
+                              await _removeSongFromPlaylist(index);
+                            },
+                          ),
+                        );
+                      }
+
                       return Dismissible(
                         key: ValueKey('${song.id}_$index'),
                         direction: DismissDirection.endToStart,
@@ -309,12 +492,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                               false;
                         },
                         onDismissed: (_) => _removeSongFromPlaylist(index),
-                        child: SongTile(
-                          song: song,
-                          playlist: _playlist!.songs,
-                          index: index,
-                          showArtist: true,
-                        ),
+                        child: tile,
                       );
                     },
                   ),
