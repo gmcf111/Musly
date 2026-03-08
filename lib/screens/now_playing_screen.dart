@@ -11,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import '../models/song.dart';
 import '../models/radio_station.dart';
 import '../providers/player_provider.dart';
+import '../providers/library_provider.dart';
 import '../services/subsonic_service.dart';
 import '../services/player_ui_settings_service.dart';
 import '../widgets/star_rating_widget.dart';
@@ -1904,14 +1905,15 @@ class _SongInfoState extends State<_SongInfo> {
   ) async {
     if (widget.song == null) return;
 
-    final subsonicService = Provider.of<SubsonicService>(
+    // Use LibraryProvider so the playlist list gets refreshed after creation
+    final libraryProvider = Provider.of<LibraryProvider>(
       context,
       listen: false,
     );
 
     try {
-      await subsonicService.createPlaylist(
-        name: playlistName,
+      await libraryProvider.createPlaylist(
+        playlistName,
         songIds: [widget.song!.id],
       );
 
