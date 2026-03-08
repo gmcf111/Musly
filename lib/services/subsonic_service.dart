@@ -452,13 +452,32 @@ class SubsonicService {
     required String name,
     List<String>? songIds,
   }) async {
-    final params = <String, String>{'name': name};
+    // songId must be appended directly, using it as a map key would produce
+    // songId[i]=x which Navidrome doesn't recognize
+    String url = _buildUrl('createPlaylist', {'name': name});
     if (songIds != null && songIds.isNotEmpty) {
-      for (int i = 0; i < songIds.length; i++) {
-        params['songId[$i]'] = songIds[i];
+      for (final songId in songIds) {
+        url += '&songId=${Uri.encodeComponent(songId)}';
       }
     }
-    await _request('createPlaylist', params);
+
+    try {
+      final response = await _dio.get(url);
+      final data = response.data;
+
+      final decoded = data is String ? json.decode(data) : data;
+      final subsonicResponse = decoded['subsonic-response'];
+      if (subsonicResponse == null) {
+        throw Exception('Invalid response format');
+      }
+
+      if (subsonicResponse['status'] != 'ok') {
+        final error = subsonicResponse['error'];
+        throw Exception(error?['message'] ?? 'Unknown error');
+      }
+    } on DioException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
   }
 
   Future<void> updatePlaylist({
@@ -486,15 +505,14 @@ class SubsonicService {
       }
     }
 
-    debugPrint('updatePlaylist URL: $url');
+    debugPrint('updatePlaylist URL: ${_sanitizeUrl(url)}');
 
     try {
       final response = await _dio.get(url);
       final data = response.data;
 
-      final subsonicResponse = data is String
-          ? json.decode(data)
-          : data['subsonic-response'];
+      final decoded = data is String ? json.decode(data) : data;
+      final subsonicResponse = decoded['subsonic-response'];
       if (subsonicResponse == null) {
         throw Exception('Invalid response format');
       }
