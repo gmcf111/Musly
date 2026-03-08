@@ -1,33 +1,197 @@
+/* ── Community ──────────────────────────────────────── */
 .community {
-    background: linear-gradient(180deg, transparent 0%, rgba(250, 36, 60, 0.02) 100%);
+    background: linear-gradient(180deg, transparent 0%, rgba(255,45,85,0.025) 60%, transparent 100%);
 }
 
-/* Header */
-.community-header {
+.com-header {
     text-align: center;
-    max-width: 600px;
-    margin: 0 auto var(--spacing-3xl);
+    margin-bottom: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
 }
 
-.community-badge {
-    display: inline-block;
-    padding: var(--spacing-xs) var(--spacing-md);
-    background: var(--color-primary-light);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
-}
-
-.community-title {
-    font-size: clamp(2rem, 4vw, var(--font-size-4xl));
+.com-title {
+    font-size: clamp(2rem, 4vw, 2.75rem);
     font-weight: 800;
-    line-height: 1.2;
-    margin-bottom: var(--spacing-md);
+    letter-spacing: -0.025em;
 }
 
-.community-subtitle {
+.com-subtitle {
+    font-size: 17px;
+    color: var(--t2);
+    max-width: 480px;
+}
+
+/* Grid */
+.com-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+/* Card */
+.com-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: background 0.28s, border-color 0.28s, transform 0.28s;
+}
+
+.com-card:hover {
+    background: var(--bg-card-h);
+    border-color: var(--border-h);
+    transform: translateY(-4px);
+}
+
+.com-card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.com-card-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.com-card-title {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--t1);
+    letter-spacing: -0.01em;
+}
+
+.com-card-desc {
+    font-size: 14px;
+    color: var(--t2);
+    line-height: 1.7;
+    flex: 1;
+}
+
+/* Crypto table */
+.com-crypto {
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.com-crypto-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.com-crypto-table th {
+    text-align: left;
+    color: var(--t3);
+    font-weight: 600;
+    padding: 4px 6px 8px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 11px;
+}
+
+.com-crypto-table td {
+    padding: 7px 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+}
+
+.com-crypto-table tr:last-child td {
+    border-bottom: none;
+}
+
+.com-crypto-network {
+    color: var(--t2);
+    font-weight: 600;
+    white-space: nowrap;
+    padding-right: 12px !important;
+}
+
+.com-crypto-addr {
+    font-family: 'SF Mono', ui-monospace, monospace;
+    font-size: 10.5px;
+    color: var(--t2);
+    background: rgba(255,255,255,0.06);
+    padding: 3px 7px;
+    border-radius: 6px;
+    display: block;
+    word-break: break-all;
+    line-height: 1.6;
+    user-select: all;
+}
+
+/* Actions */
+.com-card-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.com-btn {
+    justify-content: center;
+    font-size: 14px;
+    padding: 11px 20px;
+}
+
+.com-btn--discord {
+    background: #5865f2;
+    color: white;
+    box-shadow: 0 4px 20px rgba(88, 101, 242, 0.4);
+}
+
+.com-btn--discord:hover {
+    background: #4752c4;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(88, 101, 242, 0.5);
+}
+
+.com-btn--coffee {
+    background: linear-gradient(135deg, #ffdd00, #ff9500);
+    color: #000;
+    font-weight: 700;
+    box-shadow: 0 4px 20px rgba(255, 165, 0, 0.35);
+}
+
+.com-btn--coffee:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(255, 165, 0, 0.5);
+}
+
+.com-btn--github {
+    background: rgba(255,255,255,0.08);
+    color: var(--t1);
+    border: 1px solid var(--border);
+}
+
+.com-btn--github:hover {
+    background: rgba(255,255,255,0.13);
+    border-color: var(--border-h);
+    transform: translateY(-2px);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .com-grid {
+        grid-template-columns: 1fr;
+        max-width: 520px;
+        margin: 0 auto;
+    }
+}
+
     font-size: var(--font-size-lg);
     color: var(--color-text-secondary);
 }

@@ -1,84 +1,149 @@
-.features {
-    background: linear-gradient(180deg, transparent 0%, rgba(250, 36, 60, 0.02) 50%, transparent 100%);
-}
-
-/* Header */
+/* ── Features ──────────────────────────────────────── */
 .features-header {
     text-align: center;
-    max-width: 700px;
-    margin: 0 auto var(--spacing-4xl);
-}
-
-.features-badge {
-    display: inline-block;
-    padding: var(--spacing-xs) var(--spacing-md);
-    background: var(--color-primary-light);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
+    margin-bottom: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
 }
 
 .features-title {
-    font-size: clamp(2rem, 4vw, var(--font-size-4xl));
+    font-size: clamp(2rem, 4vw, 2.75rem);
     font-weight: 800;
-    line-height: 1.2;
-    margin-bottom: var(--spacing-md);
+    letter-spacing: -0.025em;
+    line-height: 1.15;
 }
 
 .features-subtitle {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
+    font-size: 17px;
+    color: var(--t2);
+    max-width: 520px;
     line-height: 1.7;
 }
 
-/* Grid */
-.features-grid {
+/* ── Bento grid ── */
+.features-bento {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: var(--spacing-lg);
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+
+.feat-cell--wide {
+    grid-column: span 2;
 }
 
 /* Card */
-.feature-card {
-    padding: var(--spacing-xl);
+.feat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 26px;
     height: 100%;
+    min-height: 175px;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-md);
+    gap: 12px;
+    transition: background 0.28s ease, border-color 0.28s ease, transform 0.28s ease, box-shadow 0.28s ease;
+    position: relative;
+    overflow: hidden;
 }
 
-.feature-icon {
-    width: 48px;
-    height: 48px;
+.feat-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+}
+
+.feat-card:hover {
+    background: var(--bg-card-h);
+    border-color: var(--border-h);
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+}
+
+.feat-accent-line {
+    position: absolute;
+    top: 0;
+    left: 26px;
+    width: 30px;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    opacity: 0;
+    transition: opacity 0.28s ease;
+}
+
+.feat-card:hover .feat-accent-line {
+    opacity: 1;
+}
+
+.feat-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--gradient-primary);
-    border-radius: var(--radius-lg);
-    color: white;
     flex-shrink: 0;
 }
 
-.feature-title {
-    font-size: var(--font-size-lg);
+.feat-title {
+    font-size: 16px;
     font-weight: 700;
+    color: var(--t1);
+    letter-spacing: -0.01em;
 }
 
-.feature-description {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    line-height: 1.7;
+.feat-desc {
+    font-size: 13.5px;
+    color: var(--t2);
+    line-height: 1.65;
 }
 
-/* Responsive */
-@media (max-width: 640px) {
-    .features-grid {
+/* Wide card layout */
+.feat-cell--wide .feat-card {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 18px;
+}
+
+.feat-cell--wide .feat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 13px;
+    margin-top: 3px;
+}
+
+.feat-cell--wide .feat-title {
+    font-size: 19px;
+}
+
+.feat-cell--wide .feat-desc {
+    font-size: 14.5px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .features-bento {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .feat-cell--wide {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 580px) {
+    .features-bento {
         grid-template-columns: 1fr;
     }
 
-    .feature-card {
-        padding: var(--spacing-lg);
+    .feat-cell--wide {
+        grid-column: span 1;
+    }
+
+    .feat-cell--wide .feat-card {
+        flex-direction: column;
     }
 }

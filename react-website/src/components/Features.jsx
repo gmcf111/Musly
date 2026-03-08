@@ -13,71 +13,95 @@ import {
     Sparkles
 } from 'lucide-react'
 import FadeIn from './effects/FadeIn'
-import SpotlightCard from './effects/SpotlightCard'
 import GradientText from './effects/GradientText'
 import './Features.css'
 
+// bento: size can be 'wide' (spans 2 cols), 'tall', or 'normal'
 const features = [
     {
         icon: Music,
         title: 'Apple Music UI',
-        description: 'Beautiful, modern interface inspired by Apple Music with smooth animations and intuitive navigation.'
+        description: 'A beautiful, modern interface inspired by Apple Music — smooth animations, intuitive navigation, and a premium feel on every screen.',
+        size: 'wide',
+        accent: '#ff2d55',
     },
     {
         icon: Mic2,
         title: 'Synced Lyrics',
-        description: 'Time-synced lyrics with blur effects and glow animations. Desktop fullscreen mode included.'
+        description: 'Time-synced lyrics with blur and glow effects. Desktop fullscreen mode included.',
+        size: 'normal',
+        accent: '#bf5af2',
     },
     {
         icon: Sliders,
         title: 'Premium Equalizer',
-        description: '10-band equalizer with presets (Rock, Pop, Jazz, Bass Boost) and custom preset saving.'
+        description: '10-band EQ with presets and custom save.',
+        size: 'normal',
+        accent: '#ff9f0a',
     },
     {
         icon: Car,
         title: 'Android Auto',
-        description: 'Full Android Auto integration for safe music control while driving.'
+        description: 'Full Android Auto integration for safe in-car control.',
+        size: 'normal',
+        accent: '#30d158',
     },
     {
         icon: WifiOff,
         title: 'Offline Mode',
-        description: 'Download your favorite songs and playlists for offline listening. Automatic fallback when server is unreachable.'
+        description: 'Download songs & playlists for offline listening with automatic server fallback.',
+        size: 'wide',
+        accent: '#0a84ff',
     },
     {
         icon: Smartphone,
         title: 'Cross-Platform',
-        description: 'Available on Android, iOS, Windows, macOS, and Linux. Your music everywhere.'
+        description: 'Android, iOS, Windows, macOS & Linux — your music, everywhere.',
+        size: 'normal',
+        accent: '#ff375f',
     },
     {
         icon: ListMusic,
         title: 'Smart Playlists',
-        description: 'Create, manage, and sync playlists with your Subsonic server. Full playlist management.'
+        description: 'Create, manage and sync playlists with your Subsonic server.',
+        size: 'normal',
+        accent: '#ffd60a',
     },
     {
         icon: Radio,
         title: 'Internet Radio',
-        description: 'Stream internet radio stations from your server. Support for various streaming formats.'
+        description: 'Stream internet radio stations from your server in multiple formats.',
+        size: 'normal',
+        accent: '#64d2ff',
     },
     {
         icon: Shuffle,
         title: 'Auto-DJ',
-        description: 'Smart queue that automatically adds similar songs when your queue ends.'
+        description: 'Smart queue that adds similar songs when your list ends.',
+        size: 'normal',
+        accent: '#ff6961',
     },
     {
         icon: Heart,
         title: 'Star Ratings',
-        description: 'Rate your songs with 1-5 stars. Synced with your Subsonic server.'
+        description: 'Rate songs 1-5 stars, synced with your server.',
+        size: 'normal',
+        accent: '#ff375f',
     },
     {
         icon: Volume2,
         title: 'ReplayGain',
-        description: 'Automatic volume normalization for consistent playback across all tracks.'
+        description: 'Automatic volume normalisation across all tracks.',
+        size: 'normal',
+        accent: '#30d158',
     },
     {
         icon: Sparkles,
-        title: 'Smart Recommendations',
-        description: 'Personalized mixes, "For You" feed, and listening history based on your taste.'
-    }
+        title: 'Smart Mixes',
+        description: 'Personalised mixes and a "For You" feed based on your taste.',
+        size: 'normal',
+        accent: '#bf5af2',
+    },
 ]
 
 export default function Features() {
@@ -86,27 +110,36 @@ export default function Features() {
             <div className="container">
                 {/* Header */}
                 <FadeIn className="features-header">
-                    <span className="features-badge">Features</span>
+                    <span className="section-tag">Features</span>
                     <h2 className="features-title">
                         Everything You Need to{' '}
                         <GradientText>Enjoy Music</GradientText>
                     </h2>
                     <p className="features-subtitle">
-                        Musly comes packed with features designed to give you the best music streaming experience from your self-hosted server.
+                        Musly is packed with features to give you the best self-hosted music experience.
                     </p>
                 </FadeIn>
 
-                {/* Grid */}
-                <div className="features-grid">
-                    {features.map((feature, index) => (
-                        <FadeIn key={feature.title} delay={index * 0.05}>
-                            <SpotlightCard className="feature-card">
-                                <div className="feature-icon">
-                                    <feature.icon size={24} />
+                {/* Bento Grid */}
+                <div className="features-bento">
+                    {features.map((feature, i) => (
+                        <FadeIn key={feature.title} delay={i * 0.04} className={`feat-cell feat-cell--${feature.size}`}>
+                            <div className="feat-card">
+                                <div
+                                    className="feat-icon"
+                                    style={{ background: `${feature.accent}22`, color: feature.accent }}
+                                >
+                                    <feature.icon size={22} />
                                 </div>
-                                <h3 className="feature-title">{feature.title}</h3>
-                                <p className="feature-description">{feature.description}</p>
-                            </SpotlightCard>
+                                <div className="feat-content">
+                                    <h3 className="feat-title">{feature.title}</h3>
+                                    <p className="feat-desc">{feature.description}</p>
+                                </div>
+                                <div
+                                    className="feat-accent-line"
+                                    style={{ background: feature.accent }}
+                                />
+                            </div>
                         </FadeIn>
                     ))}
                 </div>

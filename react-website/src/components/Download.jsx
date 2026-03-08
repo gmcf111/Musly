@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Download, Apple, Monitor, Smartphone, ExternalLink, Github } from 'lucide-react'
+import { Download, Monitor, Smartphone, Github, ExternalLink, CheckCircle, Clock } from 'lucide-react'
 import FadeIn from './effects/FadeIn'
 import GradientText from './effects/GradientText'
 import { useGithubRelease } from '../hooks/useGithubRelease'
@@ -10,37 +10,42 @@ const platforms = [
         name: 'Android',
         icon: Smartphone,
         status: 'available',
-        description: 'Download APK',
-        link: 'https://github.com/dddevid/Musly/releases/latest'
+        badge: 'APK Direct',
+        description: 'Android 6.0+',
+        link: 'https://github.com/dddevid/Musly/releases/latest',
     },
     {
         name: 'Windows',
         icon: Monitor,
         status: 'available',
-        description: 'Download EXE',
-        link: 'https://github.com/dddevid/Musly/releases/latest'
+        badge: 'Installer',
+        description: 'Windows 10/11',
+        link: 'https://github.com/dddevid/Musly/releases/latest',
     },
     {
         name: 'iOS',
-        icon: Apple,
-        status: 'build',
-        description: 'Build from source',
-        link: 'https://github.com/dddevid/Musly'
+        icon: Smartphone,
+        status: 'available',
+        badge: 'IPA',
+        description: 'iOS 14+',
+        link: 'https://github.com/dddevid/Musly/releases/latest',
     },
     {
         name: 'macOS',
-        icon: Apple,
-        status: 'build',
-        description: 'Build from source',
-        link: 'https://github.com/dddevid/Musly'
+        icon: Monitor,
+        status: 'available',
+        badge: 'DMG',
+        description: 'macOS 11+',
+        link: 'https://github.com/dddevid/Musly/releases/latest',
     },
     {
         name: 'Linux',
         icon: Monitor,
-        status: 'build',
-        description: 'Build from source',
-        link: 'https://github.com/dddevid/Musly'
-    }
+        status: 'available',
+        badge: 'AppImage / deb',
+        description: 'Ubuntu, Arch, etc.',
+        link: 'https://github.com/dddevid/Musly/releases/latest',
+    },
 ]
 
 export default function DownloadSection() {
@@ -50,53 +55,58 @@ export default function DownloadSection() {
         <section id="download" className="download section">
             <div className="container">
                 {/* Header */}
-                <FadeIn className="download-header">
-                    <span className="download-badge">Download</span>
-                    <h2 className="download-title">
-                        Get <GradientText>Musly</GradientText> Today
+                <FadeIn className="dl-header">
+                    <span className="section-tag">Download</span>
+                    <h2 className="dl-title">
+                        Get <GradientText>Musly</GradientText> Free
                     </h2>
-                    <p className="download-subtitle">
-                        Free and open source. Download for your platform and start streaming your music.
+                    <p className="dl-subtitle">
+                        Open source &amp; completely free. Pick your platform and start streaming.
                     </p>
                 </FadeIn>
 
-                {/* Version Info */}
-                <FadeIn delay={0.1}>
-                    <div className="download-version">
-                        <div className="download-version-badge">
-                            <span className="download-version-number">
-                                {vLoading ? '…' : (version ?? 'v1.0.8')}
-                            </span>
-                            <span className="download-version-label">Latest Release</span>
+                {/* Version pill */}
+                {!vLoading && (
+                    <FadeIn delay={0.1}>
+                        <div className="dl-version">
+                            <div className="dl-version-dot" />
+                            <span className="dl-version-name">{version ?? 'v1.0.8'}</span>
+                            <span className="dl-version-sep">·</span>
+                            <span className="dl-version-date">{date ?? 'Latest release'}</span>
                         </div>
-                        {date && <p className="download-version-date">Released {date}</p>}
-                    </div>
-                </FadeIn>
+                    </FadeIn>
+                )}
 
-                {/* Platform Cards */}
-                <div className="download-platforms">
-                    {platforms.map((platform, index) => (
-                        <FadeIn key={platform.name} delay={0.1 + index * 0.05}>
+                {/* Platform grid */}
+                <div className="dl-grid">
+                    {platforms.map((p, i) => (
+                        <FadeIn key={p.name} delay={0.1 + i * 0.05}>
                             <motion.a
-                                href={platform.link}
+                                href={p.link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className={`download-card ${platform.status}`}
+                                className={`dl-card dl-card--${p.status}`}
                                 whileHover={{ scale: 1.02, y: -4 }}
                                 whileTap={{ scale: 0.98 }}
                             >
-                                <div className="download-card-icon">
-                                    <platform.icon size={28} />
+                                <div className="dl-card-top">
+                                    <div className="dl-card-icon">
+                                        <p.icon size={26} />
+                                    </div>
+                                    {p.status === 'available' ? (
+                                        <CheckCircle size={16} className="dl-card-status-icon dl-status-ok" />
+                                    ) : (
+                                        <Clock size={16} className="dl-card-status-icon dl-status-soon" />
+                                    )}
                                 </div>
-                                <div className="download-card-content">
-                                    <h3 className="download-card-name">{platform.name}</h3>
-                                    <p className="download-card-description">{platform.description}</p>
+                                <div className="dl-card-body">
+                                    <h3 className="dl-card-name">{p.name}</h3>
+                                    <p className="dl-card-sys">{p.description}</p>
+                                    <span className={`dl-card-badge dl-badge--${p.status}`}>
+                                        {p.status === 'available' ? <Download size={12} /> : <ExternalLink size={12} />}
+                                        {p.badge}
+                                    </span>
                                 </div>
-                                {platform.status === 'available' ? (
-                                    <Download size={20} className="download-card-action" />
-                                ) : (
-                                    <ExternalLink size={20} className="download-card-action" />
-                                )}
                             </motion.a>
                         </FadeIn>
                     ))}
@@ -104,12 +114,12 @@ export default function DownloadSection() {
 
                 {/* GitHub CTA */}
                 <FadeIn delay={0.4}>
-                    <div className="download-github">
-                        <div className="download-github-content">
-                            <Github size={32} />
+                    <div className="dl-github">
+                        <div className="dl-github-left">
+                            <Github size={28} className="dl-github-icon" />
                             <div>
-                                <h3>Open Source</h3>
-                                <p>View source code, contribute, and report issues on GitHub</p>
+                                <h3 className="dl-github-title">Open Source on GitHub</h3>
+                                <p className="dl-github-desc">Browse the source, file issues, and contribute to Musly.</p>
                             </div>
                         </div>
                         <a
@@ -118,7 +128,7 @@ export default function DownloadSection() {
                             rel="noopener noreferrer"
                             className="btn btn-secondary"
                         >
-                            <Github size={18} />
+                            <Github size={17} />
                             View on GitHub
                         </a>
                     </div>
