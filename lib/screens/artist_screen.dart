@@ -80,7 +80,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
     final subsonicService = libraryProvider.subsonicService;
+
     final messenger = ScaffoldMessenger.of(context);
+    final loc = AppLocalizations.of(context);
 
     try {
       final songsToQueue = <Song>[];
@@ -97,19 +99,23 @@ class _ArtistScreenState extends State<ArtistScreen> {
       if (songsToQueue.isNotEmpty) {
         playerProvider.addAllToQueue(songsToQueue);
       }
-      // Show snackbar on success?
 
-      // messenger.showSnackBar( 
-      //   SnackBar(
-      //     content: Text(AppLocalizations.of(context)!.addToQueue),
-      //     duration: const Duration(seconds: 2),
-      //   ),
-      // );
-    } catch (e) {
       if (!mounted) return;
+
+      final addedToQueueMessage = loc?.addedArtistToQueue ?? 'Added artist to Queue';
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Error adding to queue: $e'), //Add localization for this error msg?
+          content: Text(addedToQueueMessage),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      final addedToQueueErrorMessage = loc?.addedArtistToQueueError ?? 'Failed adding artist to Queue';
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(addedToQueueErrorMessage),
           duration: const Duration(seconds: 2),
         ),
       );
