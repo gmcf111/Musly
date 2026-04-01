@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
+import '../models/artist_ref.dart';
 import '../models/song.dart';
+import '../utils/navigation_helper.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../services/jukebox_service.dart';
@@ -409,8 +411,9 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                       icon: Icons.person_rounded,
                       title: 'Go to Artist',
                       onTap: () {
-                        Navigator.pop(context);
-                        _navigateToArtist(context);
+                        final nav = Navigator.of(context);
+                        nav.pop();
+                        _navigateToArtist(nav);
                       },
                     ),
                     _buildRatingTile(context),
@@ -722,37 +725,45 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
     }
   }
 
-  void _navigateToArtist(BuildContext context) {
+  void _navigateToArtist(NavigatorState nav) {
     final participants = widget.song.artistParticipants;
 
     if (participants != null && participants.length > 1) {
+      final ctx = NavigationHelper.navigatorKey.currentContext;
+      if (ctx == null) return;
       showModalBottomSheet(
-        context: context,
+        context: ctx,
         backgroundColor: Colors.transparent,
-        builder: (ctx) => ArtistsBottomSheet(
+        builder: (sheetCtx) => ArtistsBottomSheet(
           artists: participants,
           onArtistTap: (artist) {
-            Navigator.pop(ctx);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ArtistScreen(artistId: artist.id),
-              ),
-            );
+            Navigator.pop(sheetCtx);
+            _pushArtist(nav, artist);
           },
         ),
       );
       return;
     }
 
-    final artistId = participants?.firstOrNull?.id ?? widget.song.artistId;
+    final single = participants?.firstOrNull;
+    if (single != null) {
+      _pushArtist(nav, single);
+      return;
+    }
+
+    final artistId = widget.song.artistId;
     if (artistId != null && artistId.isNotEmpty) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ArtistScreen(artistId: artistId),
-        ),
-      );
+      nav.push(MaterialPageRoute(
+        builder: (_) => ArtistScreen(artistId: artistId),
+      ));
+    }
+  }
+
+  void _pushArtist(NavigatorState nav, ArtistRef artist) {
+    if (artist.id.isNotEmpty) {
+      nav.push(MaterialPageRoute(
+        builder: (_) => ArtistScreen(artistId: artist.id),
+      ));
     }
   }
 

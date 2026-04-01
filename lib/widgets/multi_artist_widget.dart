@@ -9,7 +9,6 @@ import '../models/artist_ref.dart';
 import '../screens/artist_screen.dart';
 import '../services/subsonic_service.dart';
 import '../theme/app_theme.dart';
-import '../utils/navigation_helper.dart';
 import 'album_artwork.dart';
 
 /// Displays a list of artists as "Artist 1, Artist 2, …".
@@ -67,16 +66,20 @@ class MultiArtistWidget extends StatelessWidget {
 
   void _navigate(BuildContext context, ArtistRef artist) {
     if (artist.id.isNotEmpty) {
+      final navigator = Navigator.of(context);
       onBeforeNavigate?.call();
-      NavigationHelper.push(context, ArtistScreen(artistId: artist.id));
+      navigator.push(MaterialPageRoute(
+        builder: (_) => ArtistScreen(artistId: artist.id),
+      ));
     } else if (artist.name.isNotEmpty) {
       _searchAndNavigate(context, artist.name);
     }
   }
 
   Future<void> _searchAndNavigate(BuildContext context, String name) async {
+    final navigator = Navigator.of(context);
+    final subsonic = Provider.of<SubsonicService>(context, listen: false);
     try {
-      final subsonic = Provider.of<SubsonicService>(context, listen: false);
       final result = await subsonic.search(
         name,
         artistCount: 5,
@@ -90,7 +93,9 @@ class MultiArtistWidget extends StatelessWidget {
           orElse: () => result.artists.first,
         );
         onBeforeNavigate?.call();
-        NavigationHelper.push(context, ArtistScreen(artistId: matched.id));
+        navigator.push(MaterialPageRoute(
+          builder: (_) => ArtistScreen(artistId: matched.id),
+        ));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -249,25 +254,35 @@ class ArtistsBottomSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            ...artists.map(
-              (artist) => ListTile(
-                leading: SizedBox(
-                  width: 46,
-                  height: 46,
-                  child: ClipOval(
-                    child: AlbumArtwork(
-                      coverArt: artist.effectiveCoverArt,
-                      size: 46,
-                      borderRadius: 23,
-                      shadow: const BoxShadow(color: Colors.transparent),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.45,
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: artists.length,
+                itemBuilder: (_, i) {
+                  final artist = artists[i];
+                  return ListTile(
+                    leading: SizedBox(
+                      width: 46,
+                      height: 46,
+                      child: ClipOval(
+                        child: AlbumArtwork(
+                          coverArt: artist.effectiveCoverArt,
+                          size: 46,
+                          borderRadius: 23,
+                          shadow: const BoxShadow(color: Colors.transparent),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                title: Text(
-                  artist.name,
-                  style: theme.textTheme.bodyLarge,
-                ),
-                onTap: () => onArtistTap(artist),
+                    title: Text(
+                      artist.name,
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                    onTap: () => onArtistTap(artist),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 12),
