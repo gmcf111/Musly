@@ -1111,6 +1111,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get artistDataNotFound => 'Artist not found';
 
   @override
+  String get addedArtistToQueue => 'Added artist to Queue';
+
+  @override
+  String get addedArtistToQueueError => 'Failed adding artist to Queue';
+
+  @override
   String get casting => 'Casting';
 
   @override

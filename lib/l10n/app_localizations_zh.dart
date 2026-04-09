@@ -1097,6 +1097,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get artistDataNotFound => '未找到艺术家';
 
   @override
+  String get addedArtistToQueue => 'Added artist to Queue';
+
+  @override
+  String get addedArtistToQueueError => 'Failed adding artist to Queue';
+
+  @override
   String get casting => '投射中';
 
   @override
@@ -1395,8 +1401,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get transcodingMobileQuality => 'Mobile Quality';
 
   @override
-  String get transcodingMobileQualitySubtitleSmart =>
-      'Used automatically on cellular data';
+  String get transcodingMobileQualitySubtitleSmart => '在移动数据上自动使用';
 
   @override
   String get transcodingMobileQualitySubtitle => 'Bitrate when on mobile data';
@@ -1420,22 +1425,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get imageCacheSubtitle => 'Save album covers locally';
 
   @override
-  String get musicCacheTitle => 'Music Cache';
+  String get musicCacheTitle => '音乐缓存';
 
   @override
-  String get musicCacheSubtitle => 'Save song metadata locally';
+  String get musicCacheSubtitle => '本地保存歌曲元数据';
 
   @override
-  String get bpmCacheTitle => 'BPM Cache';
+  String get bpmCacheTitle => 'BPM 缓存';
 
   @override
-  String get bpmCacheSubtitle => 'Save BPM analysis locally';
+  String get bpmCacheSubtitle => '本地保存 BPM 分析';
 
   @override
   String get sectionAboutInformation => 'INFORMATION';
 
   @override
-  String get sectionAboutDeveloper => 'DEVELOPER';
+  String get sectionAboutDeveloper => '开发者';
 
   @override
   String get sectionAboutLinks => 'LINKS';

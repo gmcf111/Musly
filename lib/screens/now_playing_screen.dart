@@ -937,10 +937,10 @@ class _DynamicBackground extends StatelessWidget {
             AnimatedBuilder(
               animation: animation,
               builder: (context, child) {
-                final scale = 1.1 + (animation.value * 0.2);
-
-                final offsetX = (animation.value - 0.5) * 20;
-                final offsetY = (animation.value - 0.5) * 15;
+                final t = animation.value;
+                final scale = 1.1 + (t * 0.2);
+                final offsetX = (t - 0.5) * 20;
+                final offsetY = (t - 0.5) * 15;
 
                 return Transform(
                   alignment: Alignment.center,
@@ -955,16 +955,16 @@ class _DynamicBackground extends StatelessWidget {
                       File(imageUrl),
                       key: ValueKey(imageUrl),
                       fit: BoxFit.cover,
-                      cacheWidth: 400,
-                      cacheHeight: 400,
+                      cacheWidth: 200,
+                      cacheHeight: 200,
                       errorBuilder: (ctx, e, _) =>
                           Container(color: Colors.black),
                     )
                   : CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
-                      memCacheWidth: 400,
-                      memCacheHeight: 400,
+                      memCacheWidth: 200,
+                      memCacheHeight: 200,
                       useOldImageOnUrlChange: true,
                       fadeInDuration: const Duration(milliseconds: 300),
                       fadeOutDuration: Duration.zero,
@@ -1008,26 +1008,21 @@ class _DynamicBackground extends StatelessWidget {
               },
             ),
 
-          AnimatedBuilder(
-            animation: animation,
-            builder: (context, _) {
-              final opacity1 = 0.4 + (animation.value * 0.2);
-              final opacity2 = 0.7 + (animation.value * 0.15);
-
-              return Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.black.withValues(alpha: opacity1),
-                      Colors.black.withValues(alpha: opacity2),
-                    ],
-                    stops: [0.0 + animation.value * 0.1, 1.0],
-                  ),
-                ),
-              );
-            },
+          // Combined dark overlay — uses static average values since the
+          // animation range is tiny (0.4-0.6 / 0.7-0.85) and invisible
+          // behind the blur. Removing this AnimatedBuilder saves a full
+          // rebuild every frame.
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.fromRGBO(0, 0, 0, 0.50),
+                  Color.fromRGBO(0, 0, 0, 0.78),
+                ],
+              ),
+            ),
           ),
 
           BackdropFilter(

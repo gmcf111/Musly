@@ -1120,6 +1120,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get artistDataNotFound => 'Исполнитель не найден';
 
   @override
+  String get addedArtistToQueue => 'Added artist to Queue';
+
+  @override
+  String get addedArtistToQueueError => 'Failed adding artist to Queue';
+
+  @override
   String get casting => 'Трансляция';
 
   @override

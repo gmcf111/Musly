@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_lyric/flutter_lyric.dart';
 import '../models/lyrics.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../services/subsonic_service.dart';
 import '../services/offline_service.dart';
+import 'synced_lyrics_view.dart' show AppleMusicLyricsController, AMLLLyricsWidget;
 
 class CompactLyricsView extends StatefulWidget {
   final Song song;
@@ -19,17 +19,16 @@ class CompactLyricsView extends StatefulWidget {
 }
 
 class _CompactLyricsViewState extends State<CompactLyricsView> {
-  LyricController? _lyricController;
+  final AppleMusicLyricsController _lyricsController =
+      AppleMusicLyricsController();
   StreamSubscription? _positionSubscription;
 
   bool _isLoading = true;
   String? _error;
   SyncedLyrics? _lyrics;
   bool _showReturnButton = false;
-  bool _canShowReturnButton = false;
 
-  Duration _lastUpdatePosition = Duration.zero;
-
+  Duration _lastUpdate = Duration.zero;
   late Song _song;
 
   @override
@@ -38,6 +37,7 @@ class _CompactLyricsViewState extends State<CompactLyricsView> {
     _song = widget.song;
     _loadLyrics();
     _setupPositionListener();
+    _lyricsController.addListener(_onControllerChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<PlayerProvider>(
@@ -49,28 +49,34 @@ class _CompactLyricsViewState extends State<CompactLyricsView> {
 
   @override
   void dispose() {
-    
     try {
       Provider.of<PlayerProvider>(
         context,
         listen: false,
       ).removeListener(_onPlayerStateChanged);
     } catch (_) {}
-
     _positionSubscription?.cancel();
-    _lyricController?.dispose();
+    _lyricsController.removeListener(_onControllerChanged);
+    _lyricsController.dispose();
     super.dispose();
+  }
+
+  void _onControllerChanged() {
+    if (!mounted) return;
+    final showReturn = _lyricsController.isUserScrolling;
+    if (showReturn != _showReturnButton) {
+      setState(() {
+        _showReturnButton = showReturn;
+      });
+    }
   }
 
   void _onPlayerStateChanged() {
     if (!mounted) return;
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final currentSong = playerProvider.currentSong;
-
     if (currentSong != null && currentSong.id != _song.id) {
-      setState(() {
-        _song = currentSong;
-      });
+      setState(() => _song = currentSong);
       _loadLyrics();
     }
   }
@@ -78,58 +84,22 @@ class _CompactLyricsViewState extends State<CompactLyricsView> {
   @override
   void didUpdateWidget(CompactLyricsView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.song.id != widget.song.id) {
-      
-      if (widget.song.id != _song.id) {
-        setState(() {
-          _song = widget.song;
-        });
-        _loadLyrics();
-      }
+    if (oldWidget.song.id != widget.song.id && widget.song.id != _song.id) {
+      setState(() => _song = widget.song);
+      _loadLyrics();
     }
-  }
-
-  void _initializeLyricController() {
-    _lyricController?.dispose();
-    _lyricController = LyricController();
-
-    _lyricController!.setOnTapLineCallback((Duration position) {
-      final playerProvider = Provider.of<PlayerProvider>(
-        context,
-        listen: false,
-      );
-      playerProvider.seek(position);
-    });
-
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) _canShowReturnButton = true;
-    });
-
-    _lyricController!.registerEvent(LyricEvent.stopSelection, (_) {
-      if (mounted && _canShowReturnButton) {
-        setState(() => _showReturnButton = true);
-      }
-    });
-
-    _lyricController!.registerEvent(LyricEvent.resumeActiveLine, (_) {
-      if (mounted) setState(() => _showReturnButton = false);
-    });
   }
 
   void _setupPositionListener() {
     _positionSubscription?.cancel();
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-
     _positionSubscription = playerProvider.positionStream.listen((position) {
-      if (_lyricController != null && mounted) {
-        
-        final diff = (position - _lastUpdatePosition).abs();
-        final wentBackwards = position < _lastUpdatePosition;
-
-        if (diff.inMilliseconds >= 100 || wentBackwards) {
-          _lastUpdatePosition = position;
-          _lyricController!.setProgress(position);
-        }
+      if (!mounted) return;
+      final diff = (position - _lastUpdate).abs();
+      final wentBackwards = position < _lastUpdate;
+      if (diff.inMilliseconds >= 16 || wentBackwards) {
+        _lastUpdate = position;
+        _lyricsController.setPosition(position);
       }
     });
   }
@@ -141,22 +111,18 @@ class _CompactLyricsViewState extends State<CompactLyricsView> {
     });
 
     try {
-      final subsonicService = Provider.of<SubsonicService>(
-        context,
-        listen: false,
-      );
-
+      final subsonicService =
+          Provider.of<SubsonicService>(context, listen: false);
       final offlineService = OfflineService();
       final cached = await offlineService.getLocalLyrics(_song.id);
-      final syncedData = cached?['lyricsList'] as Map<String, dynamic>?
-          ?? await subsonicService.getLyricsBySongId(_song.id);
+      final syncedData = cached?['lyricsList'] as Map<String, dynamic>? ??
+          await subsonicService.getLyricsBySongId(_song.id);
 
       if (!mounted) return;
 
       if (syncedData != null) {
         final structuredLyrics = syncedData['structuredLyrics'];
         if (structuredLyrics is List && structuredLyrics.isNotEmpty) {
-          
           final syncedEntry = structuredLyrics
               .cast<Map<String, dynamic>>()
               .firstWhere(
@@ -173,54 +139,29 @@ class _CompactLyricsViewState extends State<CompactLyricsView> {
                     text: line['value']?.toString() ?? '',
                   );
                 })
-                .where((line) => line.text.isNotEmpty)
+                .where((l) => l.text.isNotEmpty)
                 .toList();
-
             if (parsedLines.isNotEmpty) {
-              setState(() {
-                _lyrics = SyncedLyrics(lines: parsedLines);
-                _isLoading = false;
-              });
-              _initializeLyricController();
-              _lyricController!.loadLyric(_convertToLrc(_lyrics!));
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) _syncToCurrentPosition();
-              });
+              _applyLyrics(SyncedLyrics(lines: parsedLines));
               return;
             }
           }
         }
       }
 
-      final plainData = cached?['lyrics'] as Map<String, dynamic>?
-          ?? await subsonicService.getLyrics(
-        artist: _song.artist,
-        title: _song.title,
-      );
+      final plainData = cached?['lyrics'] as Map<String, dynamic>? ??
+          await subsonicService.getLyrics(
+            artist: _song.artist,
+            title: _song.title,
+          );
 
       if (plainData != null) {
         final value = plainData['value']?.toString();
         if (value != null && value.isNotEmpty) {
           if (value.contains('[') && value.contains(':')) {
-            setState(() {
-              _lyrics = SyncedLyrics.fromLrc(value);
-              _isLoading = false;
-            });
-            _initializeLyricController();
-            _lyricController!.loadLyric(value);
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) _syncToCurrentPosition();
-            });
+            _applyLyrics(SyncedLyrics.fromLrc(value));
           } else {
-            setState(() {
-              _lyrics = SyncedLyrics.fromPlainText(value);
-              _isLoading = false;
-            });
-            _initializeLyricController();
-            _lyricController!.loadLyric(_convertToLrc(_lyrics!));
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) _syncToCurrentPosition();
-            });
+            _applyLyrics(SyncedLyrics.fromPlainText(value));
           }
           return;
         }
@@ -240,65 +181,33 @@ class _CompactLyricsViewState extends State<CompactLyricsView> {
     }
   }
 
-  void _syncToCurrentPosition() {
-    if (_lyricController == null) return;
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    _lyricController!.setProgress(playerProvider.position);
+  void _applyLyrics(SyncedLyrics lyrics) {
+    if (!mounted) return;
+    setState(() {
+      _lyrics = lyrics;
+      _isLoading = false;
+    });
+    _lyricsController.loadLines(lyrics.lines);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final pos = Provider.of<PlayerProvider>(context, listen: false).position;
+      _lyricsController.setPosition(pos);
+    });
   }
 
-  String _convertToLrc(SyncedLyrics lyrics) {    final buffer = StringBuffer();
-    for (final line in lyrics.lines) {
-      final minutes = line.timestamp.inMinutes;
-      final seconds = line.timestamp.inSeconds % 60;
-      final milliseconds = line.timestamp.inMilliseconds % 1000;
-      final centiseconds = (milliseconds / 10).floor();
-      buffer.writeln(
-        '[${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.${centiseconds.toString().padLeft(2, '0')}]${line.text}',
-      );
-    }
-    return buffer.toString();
+  void _onLineTap(int index) {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    playerProvider.seek(_lyricsController.lines[index].timestamp);
+    _lyricsController.selectLine(index);
+    setState(() => _showReturnButton = true);
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) _lyricsController.clearSelection();
+    });
   }
 
   void _returnToSyncedPosition() {
+    _lyricsController.clearSelection();
     setState(() => _showReturnButton = false);
-  }
-
-  LyricStyle _buildCompactStyle() {
-    return LyricStyle(
-      textStyle: TextStyle(
-        fontSize: 18.0,
-        fontWeight: FontWeight.w600,
-        color: Colors.white.withValues(alpha: 0.5),
-        height: 1.3,
-      ),
-      activeStyle: const TextStyle(
-        fontSize: 18.0,
-        fontWeight: FontWeight.w800,
-        color: Colors.white,
-        height: 1.3,
-      ),
-      translationStyle: TextStyle(
-        fontSize: 14.0,
-        fontWeight: FontWeight.w500,
-        color: Colors.white.withValues(alpha: 0.4),
-        height: 1.3,
-      ),
-      lineGap: 16.0,
-      translationLineGap: 6.0,
-      lineTextAlign: TextAlign.center,
-      contentAlignment: CrossAxisAlignment.center,
-      fadeRange: FadeRange(top: 40.0, bottom: 40.0),
-      scrollDuration: const Duration(milliseconds: 300),
-      scrollCurve: Curves.easeOutCubic,
-      activeHighlightColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
-      selectionAnchorPosition: 0.4,
-      selectionAlignment: MainAxisAlignment.center,
-      selectedColor: Colors.white.withValues(alpha: 0.8),
-      selectedTranslationColor: Colors.white.withValues(alpha: 0.5),
-      selectionAutoResumeDuration: const Duration(milliseconds: 500),
-      activeAutoResumeDuration: const Duration(seconds: 3),
-    );
   }
 
   @override
@@ -326,22 +235,17 @@ class _CompactLyricsViewState extends State<CompactLyricsView> {
       );
     }
 
-    if (_lyricController == null) {
-      return const Center(
-        child: Text('No lyrics', style: TextStyle(color: Colors.white54)),
-      );
-    }
-
     return Stack(
       children: [
-        
-        LyricView(
-          controller: _lyricController!,
-          style: _buildCompactStyle(),
-          width: double.infinity,
-          height: double.infinity,
+        AMLLLyricsWidget(
+          controller: _lyricsController,
+          onLineTap: _onLineTap,
+          onUserScroll: () => setState(() => _showReturnButton = true),
+          fontSize: 18.0,
+          lineGap: 14.0,
+          enableBlur: false,
+          alignPosition: 0.5,
         ),
-
         if (_showReturnButton)
           Positioned(
             bottom: 16,

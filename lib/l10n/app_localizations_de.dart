@@ -484,7 +484,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get browseCategories => 'Kategorien durchstöbern';
 
   @override
-  String get liveSearchSection => 'Search';
+  String get liveSearchSection => 'Suche';
 
   @override
   String get liveSearch => 'Live Search';
@@ -1121,6 +1121,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get artistDataNotFound => 'Künstler nicht gefunden';
 
   @override
+  String get addedArtistToQueue => 'Added artist to Queue';
+
+  @override
+  String get addedArtistToQueueError => 'Failed adding artist to Queue';
+
+  @override
   String get casting => 'Übertragen';
 
   @override
@@ -1196,7 +1202,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sectionJukebox => 'JUKEBOX MODE';
 
   @override
-  String get jukeboxMode => 'Jukebox Mode';
+  String get jukeboxMode => 'Jukebox Modus';
 
   @override
   String get jukeboxModeSubtitle =>
@@ -1293,7 +1299,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get artworkShadowColorAccent => 'Accent';
 
   @override
-  String get artworkPreview => 'Preview';
+  String get artworkPreview => 'Vorschau';
 
   @override
   String artworkCornerRadiusLabel(int value) {
@@ -1304,7 +1310,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get noArtwork => 'No artwork';
 
   @override
-  String get serverUnreachableTitle => 'Cannot reach server';
+  String get serverUnreachableTitle => 'Server nicht erreichbar';
 
   @override
   String get serverUnreachableSubtitle =>

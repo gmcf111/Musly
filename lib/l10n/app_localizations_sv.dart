@@ -30,7 +30,7 @@ class AppLocalizationsSv extends AppLocalizations {
   String get discoverMix => 'Discover Mix';
 
   @override
-  String get recentlyPlayed => 'Senast Spelat';
+  String get recentlyPlayed => 'Nyligen spelade';
 
   @override
   String get yourPlaylists => 'Dina Spellistor';
@@ -39,7 +39,7 @@ class AppLocalizationsSv extends AppLocalizations {
   String get madeForYou => 'Skapat För Dig';
 
   @override
-  String get topRated => 'Högst Rankade';
+  String get topRated => 'Top Rated';
 
   @override
   String get noContentAvailable => 'Inget innehåll tillgängligt';
@@ -480,14 +480,14 @@ class AppLocalizationsSv extends AppLocalizations {
   String get browseCategories => 'Bläddra Kategorier';
 
   @override
-  String get liveSearchSection => 'Search';
+  String get liveSearchSection => 'Sök';
 
   @override
-  String get liveSearch => 'Live Search';
+  String get liveSearch => 'Livesökning';
 
   @override
   String get liveSearchSubtitle =>
-      'Update results as you type instead of showing a dropdown';
+      'Uppdatera resultat medan du skriver istället för att visa en lista';
 
   @override
   String get categoryMadeForYou => 'Skapad För Dig';
@@ -1114,6 +1114,12 @@ class AppLocalizationsSv extends AppLocalizations {
   String get artistDataNotFound => 'Artist hittades inte';
 
   @override
+  String get addedArtistToQueue => 'Added artist to Queue';
+
+  @override
+  String get addedArtistToQueueError => 'Failed adding artist to Queue';
+
+  @override
   String get casting => 'Castar';
 
   @override
@@ -1186,17 +1192,17 @@ class AppLocalizationsSv extends AppLocalizations {
   }
 
   @override
-  String get sectionJukebox => 'JUKEBOX LÄGE';
+  String get sectionJukebox => 'JUKEBOXLÄGE';
 
   @override
-  String get jukeboxMode => 'Jukebox Läge';
+  String get jukeboxMode => 'Jukeboxläge';
 
   @override
   String get jukeboxModeSubtitle =>
       'Spela upp ljud genom servern istället för denna enhet';
 
   @override
-  String get openJukeboxController => 'Öppna Jukebox Kontroll';
+  String get openJukeboxController => 'Öppna Jukeboxkontroll';
 
   @override
   String get jukeboxClearQueue => 'Rensa Kö';
@@ -1220,11 +1226,11 @@ class AppLocalizationsSv extends AppLocalizations {
   String get playOnJukebox => 'Spela på Jukebox';
 
   @override
-  String get addToJukeboxQueue => 'Lägg till i Jukebox-kön';
+  String get addToJukeboxQueue => 'Lägg till i Jukeboxkön';
 
   @override
   String get jukeboxNotSupported =>
-      'Jukebox-läget stöds inte av denna server. Aktivera det i din serverkonfiguration (t.ex. EnableJukebox = true in Navidrome).';
+      'Jukeboxläget stöds inte av denna server. Aktivera det i din serverkonfiguration (t.ex. EnableJukebox = true in Navidrome).';
 
   @override
   String get musicFoldersDialogTitle => 'Välj Musikmappar';
@@ -1274,7 +1280,7 @@ class AppLocalizationsSv extends AppLocalizations {
   String get artworkShadowMedium => 'Medium';
 
   @override
-  String get artworkShadowStrong => 'Kraftig';
+  String get artworkShadowStrong => 'Stark';
 
   @override
   String get artworkShadowColor => 'Skuggfärg';
@@ -1297,67 +1303,67 @@ class AppLocalizationsSv extends AppLocalizations {
   String get noArtwork => 'Ingen bild';
 
   @override
-  String get serverUnreachableTitle => 'Cannot reach server';
+  String get serverUnreachableTitle => 'Kan inte nå servern';
 
   @override
   String get serverUnreachableSubtitle =>
-      'Check your connection or server settings.';
+      'Kontrollera din anslutning eller dina serverinställningar.';
 
   @override
-  String get openOfflineMode => 'Open in offline mode';
+  String get openOfflineMode => 'Öppna i offline läge';
 
   @override
-  String get appearanceSection => 'Appearance';
+  String get appearanceSection => 'Utseende';
 
   @override
-  String get themeLabel => 'Theme';
+  String get themeLabel => 'Tema';
 
   @override
-  String get accentColorLabel => 'Accent color';
+  String get accentColorLabel => 'Accentfärg';
 
   @override
-  String get circularDesignLabel => 'Circular Design';
+  String get circularDesignLabel => 'Cirkulär Design';
 
   @override
   String get circularDesignSubtitle =>
-      'Floating, rounded UI with translucent panels and glass-blur effect on the player and navigation bar.';
+      'Flytande, avrundat UI med genomskinliga paneler och glass-blur effekt på spelaren och navigationsfältet.';
 
   @override
   String get themeModeSystem => 'System';
 
   @override
-  String get themeModeLight => 'Light';
+  String get themeModeLight => 'Ljust';
 
   @override
-  String get themeModeDark => 'Dark';
+  String get themeModeDark => 'Mörkt';
 
   @override
   String get liveLabel => 'LIVE';
 
   @override
-  String get discordStatusText => 'Discord status text';
+  String get discordStatusText => 'Discord statustext';
 
   @override
   String get discordStatusTextSubtitle =>
-      'Second line shown in Discord activity';
+      'Andra raden visas i Discord-aktivitet';
 
   @override
-  String get discordRpcStyleArtist => 'Artist name';
+  String get discordRpcStyleArtist => 'Artistnamn';
 
   @override
-  String get discordRpcStyleSong => 'Song title';
+  String get discordRpcStyleSong => 'Låttitel';
 
   @override
-  String get discordRpcStyleApp => 'App name (Musly)';
+  String get discordRpcStyleApp => 'Appnamn (Musly)';
 
   @override
-  String get sectionVolumeNormalization => 'VOLUME NORMALIZATION (REPLAYGAIN)';
+  String get sectionVolumeNormalization => 'VOLYM NORMALISERING (REPLAYGAIN)';
 
   @override
-  String get replayGainModeOff => 'Off';
+  String get replayGainModeOff => 'Av';
 
   @override
-  String get replayGainModeTrack => 'Track';
+  String get replayGainModeTrack => 'Låt';
 
   @override
   String get replayGainModeAlbum => 'Album';
@@ -1368,7 +1374,7 @@ class AppLocalizationsSv extends AppLocalizations {
   }
 
   @override
-  String get replayGainPreventClipping => 'Prevent Clipping';
+  String get replayGainPreventClipping => 'Förhindra Ljudklippning';
 
   @override
   String replayGainFallbackGain(String value) {
@@ -1377,98 +1383,100 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String autoDjSongsToAdd(int count) {
-    return 'Songs to Add: $count';
+    return 'Låtar att tillägga: $count';
   }
 
   @override
-  String get transcodingEnable => 'Enable Transcoding';
+  String get transcodingEnable => 'Aktivera Transkodning';
 
   @override
   String get transcodingEnableSubtitle =>
-      'Reduce data usage with lower quality';
+      'Minska dataanvändningen med lägre kvalitet';
 
   @override
-  String get smartTranscoding => 'Smart Transcoding';
+  String get smartTranscoding => 'Smart Transkodning';
 
   @override
   String get smartTranscodingSubtitle =>
-      'Automatically adjusts quality based on your connection (WiFi vs mobile data)';
+      'Justerar kvaliteten automatiskt baserat på din anslutning (WiFi vs mobildata)';
 
   @override
-  String get smartTranscodingDetectedNetwork => 'Detected network: ';
+  String get smartTranscodingDetectedNetwork => 'Upptäckt nätverk: ';
 
   @override
   String smartTranscodingActiveBitrate(String bitrate) {
-    return 'Active bitrate: $bitrate';
+    return 'Aktiv bithastighet: $bitrate';
   }
 
   @override
-  String get transcodingWifiQuality => 'WiFi Quality';
+  String get transcodingWifiQuality => 'WiFi Kvalité';
 
   @override
   String get transcodingWifiQualitySubtitleSmart =>
-      'Used automatically on WiFi';
+      'Används automatiskt på WiFi';
 
   @override
-  String get transcodingWifiQualitySubtitle => 'Bitrate when on WiFi';
+  String get transcodingWifiQualitySubtitle =>
+      'Bithastighet vid användning av WiFi';
 
   @override
-  String get transcodingMobileQuality => 'Mobile Quality';
+  String get transcodingMobileQuality => 'Mobildata Kvalité';
 
   @override
   String get transcodingMobileQualitySubtitleSmart =>
-      'Used automatically on cellular data';
+      'Används automatiskt på mobildata';
 
   @override
-  String get transcodingMobileQualitySubtitle => 'Bitrate when on mobile data';
+  String get transcodingMobileQualitySubtitle =>
+      'Bithastighet vid användning av mobildata';
 
   @override
   String get transcodingFormat => 'Format';
 
   @override
-  String get transcodingFormatSubtitle => 'Audio codec used for streaming';
+  String get transcodingFormatSubtitle => 'Ljudkodek som används för streaming';
 
   @override
-  String get transcodingBitrateOriginal => 'Original (No Transcoding)';
+  String get transcodingBitrateOriginal => 'Original (Ingen Omkodning)';
 
   @override
   String get transcodingFormatOriginal => 'Original';
 
   @override
-  String get imageCacheTitle => 'Image Cache';
+  String get imageCacheTitle => 'Bildcache';
 
   @override
-  String get imageCacheSubtitle => 'Save album covers locally';
+  String get imageCacheSubtitle => 'Spara albumomslag lokalt';
 
   @override
-  String get musicCacheTitle => 'Music Cache';
+  String get musicCacheTitle => 'Musikcache';
 
   @override
-  String get musicCacheSubtitle => 'Save song metadata locally';
+  String get musicCacheSubtitle => 'Spara låt metadata lokalt';
 
   @override
-  String get bpmCacheTitle => 'BPM Cache';
+  String get bpmCacheTitle => 'BPM-cache';
 
   @override
-  String get bpmCacheSubtitle => 'Save BPM analysis locally';
+  String get bpmCacheSubtitle => 'Spara BPM analys lokalt';
 
   @override
   String get sectionAboutInformation => 'INFORMATION';
 
   @override
-  String get sectionAboutDeveloper => 'DEVELOPER';
+  String get sectionAboutDeveloper => 'UTVECKLARE';
 
   @override
-  String get sectionAboutLinks => 'LINKS';
+  String get sectionAboutLinks => 'LÄNKAR';
 
   @override
   String get aboutVersion => 'Version';
 
   @override
-  String get aboutPlatform => 'Platform';
+  String get aboutPlatform => 'Plattform';
 
   @override
-  String get aboutMadeBy => 'Made by dddevid';
+  String get aboutMadeBy => 'Gjord av dddevid';
 
   @override
   String get aboutGitHub => 'github.com/dddevid';
@@ -1477,11 +1485,11 @@ class AppLocalizationsSv extends AppLocalizations {
   String get aboutLinkGitHub => 'GitHub Repository';
 
   @override
-  String get aboutLinkChangelog => 'Changelog';
+  String get aboutLinkChangelog => 'Ändringshistorik';
 
   @override
-  String get aboutLinkReportIssue => 'Report Issue';
+  String get aboutLinkReportIssue => 'Rapportera Problem';
 
   @override
-  String get aboutLinkDiscord => 'Join Discord Community';
+  String get aboutLinkDiscord => 'Gå med Discord-communityn';
 }

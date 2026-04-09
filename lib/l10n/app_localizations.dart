@@ -2152,6 +2152,18 @@ abstract class AppLocalizations {
   /// **'Artist not found'**
   String get artistDataNotFound;
 
+  /// Snackbar when user adds artist to queue
+  ///
+  /// In en, this message translates to:
+  /// **'Added artist to Queue'**
+  String get addedArtistToQueue;
+
+  /// Error shown in snackbar when adding artist to queue fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed adding artist to Queue'**
+  String get addedArtistToQueueError;
+
   /// Title shown in the Chromecast control dialog when actively casting
   ///
   /// In en, this message translates to:
