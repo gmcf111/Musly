@@ -1135,6 +1135,27 @@ class _PlayerHeader extends StatelessWidget {
                   ),
                 ),
 
+              Selector<PlayerProvider, double>(
+                selector: (_, p) => p.playbackSpeed,
+                builder: (context, speed, _) => IconButton(
+                  tooltip: 'Playback speed (${speed == 1.0 ? '1×' : '$speed×'})',
+                  onPressed: () => _showSpeedDialog(context),
+                  icon: speed != 1.0
+                      ? Text(
+                          '$speed×',
+                          style: const TextStyle(
+                            color: AppTheme.appleMusicRed,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : const Icon(
+                          CupertinoIcons.speedometer,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                ),
+              ),
               Selector<PlayerProvider, bool>(
                 selector: (_, p) => p.hasSleepTimer,
                 builder: (context, hasTimer, _) => IconButton(
@@ -1164,6 +1185,75 @@ class _PlayerHeader extends StatelessWidget {
     );
   }
 
+  void _showSpeedDialog(BuildContext context) {
+    final player = context.read<PlayerProvider>();
+    final speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSt) => Container(
+          decoration: BoxDecoration(
+            color: AppTheme.darkSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 36,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: AppTheme.darkDivider,
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Playback Speed',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...speeds.map(
+                (s) => ListTile(
+                  title: Text(
+                    s == 1.0 ? 'Normal (1×)' : '$s×',
+                    style: TextStyle(
+                      color: player.playbackSpeed == s
+                          ? AppTheme.appleMusicRed
+                          : Colors.white,
+                      fontWeight: player.playbackSpeed == s
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  trailing: player.playbackSpeed == s
+                      ? const Icon(
+                          CupertinoIcons.checkmark,
+                          color: AppTheme.appleMusicRed,
+                          size: 16,
+                        )
+                      : null,
+                  onTap: () {
+                    player.setPlaybackSpeed(s);
+                    setSt(() {});
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showSleepTimerDialog(BuildContext context) {
     final player = context.read<PlayerProvider>();
 
@@ -1178,67 +1268,198 @@ class _PlayerHeader extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => Container(
-        decoration: BoxDecoration(
-          color: AppTheme.darkSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 5,
-              decoration: BoxDecoration(
-                color: AppTheme.darkDivider,
-                borderRadius: BorderRadius.circular(2.5),
-              ),
+      isScrollControlled: true,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSt) {
+          bool endCurrentSong = player.sleepTimerEndCurrentSong;
+          bool fadeOut = player.sleepTimerFadeOut;
+          return Container(
+            decoration: BoxDecoration(
+              color: AppTheme.darkSurface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Sleep Timer',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ...options.map(
-              (opt) => ListTile(
-                title: Text(
-                  opt.$1,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetCtx);
-                  player.setSleepTimer(opt.$2);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Sleep timer set for ${opt.$1}'),
-                      duration: const Duration(seconds: 2),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 36,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppTheme.darkDivider,
+                      borderRadius: BorderRadius.circular(2.5),
                     ),
-                  );
-                },
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Sleep Timer',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const Divider(color: Colors.white12, height: 24),
+                  SwitchListTile(
+                    value: fadeOut,
+                    activeThumbColor: AppTheme.appleMusicRed,
+                    title: const Text(
+                      'Fade out',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Gradually lower volume in the last 30 s',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    onChanged: (v) => setSt(() => fadeOut = v),
+                  ),
+                  SwitchListTile(
+                    value: endCurrentSong,
+                    activeThumbColor: AppTheme.appleMusicRed,
+                    title: const Text(
+                      'Finish current song',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      'Stop after the current track ends',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    onChanged: (v) => setSt(() => endCurrentSong = v),
+                  ),
+                  const Divider(color: Colors.white12, height: 8),
+                  ...options.map(
+                    (opt) => ListTile(
+                      title: Text(
+                        opt.$1,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      onTap: () {
+                        Navigator.pop(sheetCtx);
+                        player.setSleepTimer(
+                          opt.$2,
+                          endCurrentSong: endCurrentSong,
+                          fadeOut: fadeOut,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Sleep timer set for ${opt.$1}'),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(
+                      CupertinoIcons.timer,
+                      color: Colors.white70,
+                    ),
+                    title: const Text(
+                      'Custom duration…',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      _showCustomSleepTimerDialog(
+                        context,
+                        endCurrentSong: endCurrentSong,
+                        fadeOut: fadeOut,
+                      );
+                    },
+                  ),
+                  if (player.hasSleepTimer)
+                    ListTile(
+                      leading: const Icon(
+                        CupertinoIcons.xmark_circle,
+                        color: AppTheme.appleMusicRed,
+                      ),
+                      title: const Text(
+                        'Cancel timer',
+                        style: TextStyle(color: AppTheme.appleMusicRed),
+                      ),
+                      onTap: () {
+                        Navigator.pop(sheetCtx);
+                        player.setSleepTimer(Duration.zero);
+                      },
+                    ),
+                  const SizedBox(height: 16),
+                ],
               ),
             ),
-            if (player.hasSleepTimer)
-              ListTile(
-                leading: const Icon(
-                  CupertinoIcons.xmark_circle,
-                  color: AppTheme.appleMusicRed,
+          );
+        },
+      ),
+    );
+  }
+
+  void _showCustomSleepTimerDialog(
+    BuildContext context, {
+    required bool endCurrentSong,
+    required bool fadeOut,
+  }) {
+    final player = context.read<PlayerProvider>();
+    int minutes = 30;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          backgroundColor: AppTheme.darkSurface,
+          title: const Text(
+            'Custom Sleep Timer',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$minutes min',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
                 ),
-                title: const Text(
-                  'Cancel timer',
-                  style: TextStyle(color: AppTheme.appleMusicRed),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetCtx);
-                  player.setSleepTimer(Duration.zero);
-                },
               ),
-            const SizedBox(height: 16),
+              Slider(
+                value: minutes.toDouble(),
+                min: 1,
+                max: 180,
+                divisions: 179,
+                activeColor: AppTheme.appleMusicRed,
+                onChanged: (v) => setSt(() => minutes = v.round()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                player.setSleepTimer(
+                  Duration(minutes: minutes),
+                  endCurrentSong: endCurrentSong,
+                  fadeOut: fadeOut,
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Sleep timer set for $minutes min'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+              child: const Text(
+                'Set',
+                style: TextStyle(color: AppTheme.appleMusicRed),
+              ),
+            ),
           ],
         ),
       ),

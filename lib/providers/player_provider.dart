@@ -67,6 +67,11 @@ class PlayerProvider extends ChangeNotifier {
 
   Timer? _sleepTimer;
   DateTime? _sleepTimerEnd;
+  bool _sleepTimerEndCurrentSong = false;
+  bool _sleepTimerFadeOut = false;
+  Timer? _sleepTimerFadeTimer;
+
+  double _playbackSpeed = 1.0;
 
   PlayerProvider(
     this._subsonicService,
@@ -685,7 +690,17 @@ class PlayerProvider extends ChangeNotifier {
     return _position.inMilliseconds / _duration.inMilliseconds;
   }
 
+  double get playbackSpeed => _playbackSpeed;
+
+  Future<void> setPlaybackSpeed(double speed) async {
+    _playbackSpeed = speed.clamp(0.25, 4.0);
+    await _audioPlayer.setSpeed(_playbackSpeed);
+    notifyListeners();
+  }
+
   bool get hasSleepTimer => _sleepTimer != null;
+  bool get sleepTimerEndCurrentSong => _sleepTimerEndCurrentSong;
+  bool get sleepTimerFadeOut => _sleepTimerFadeOut;
 
   Duration? get sleepTimerRemaining {
     if (_sleepTimerEnd == null) return null;
@@ -693,20 +708,64 @@ class PlayerProvider extends ChangeNotifier {
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
-  void setSleepTimer(Duration duration) {
+  void setSleepTimer(
+    Duration duration, {
+    bool endCurrentSong = false,
+    bool fadeOut = false,
+  }) {
     _sleepTimer?.cancel();
+    _sleepTimerFadeTimer?.cancel();
     _sleepTimer = null;
     _sleepTimerEnd = null;
+    _sleepTimerEndCurrentSong = endCurrentSong;
+    _sleepTimerFadeOut = fadeOut;
 
     if (duration > Duration.zero) {
       _sleepTimerEnd = DateTime.now().add(duration);
+
+      if (fadeOut) {
+        final fadeStart = duration - const Duration(seconds: 30);
+        if (fadeStart > Duration.zero) {
+          _sleepTimerFadeTimer = Timer(fadeStart, _startFadeOut);
+        } else {
+          _startFadeOut();
+        }
+      }
+
       _sleepTimer = Timer(duration, () {
-        pause();
-        _sleepTimer = null;
-        _sleepTimerEnd = null;
-        notifyListeners();
+        if (endCurrentSong) {
+          _sleepTimerEndCurrentSong = true;
+          _sleepTimer = null;
+          _sleepTimerEnd = null;
+          notifyListeners();
+        } else {
+          _doSleepTimerStop();
+        }
       });
     }
+    notifyListeners();
+  }
+
+  void _startFadeOut() {
+    const steps = 30;
+    const stepDuration = Duration(seconds: 1);
+    final originalVolume = _volume;
+    int step = 0;
+    Timer.periodic(stepDuration, (t) {
+      step++;
+      final newVolume = originalVolume * (1.0 - step / steps);
+      _audioPlayer.setVolume(newVolume.clamp(0.0, 1.0));
+      if (step >= steps) t.cancel();
+    });
+  }
+
+  void _doSleepTimerStop() {
+    _audioPlayer.setVolume(_volume);
+    pause();
+    _sleepTimer = null;
+    _sleepTimerEnd = null;
+    _sleepTimerFadeOut = false;
+    _sleepTimerEndCurrentSong = false;
     notifyListeners();
   }
 
@@ -805,6 +864,11 @@ class PlayerProvider extends ChangeNotifier {
         durationPlayed: _duration.inSeconds,
         completed: true,
       );
+    }
+
+    if (_sleepTimerEndCurrentSong) {
+      _doSleepTimerStop();
+      return;
     }
 
     switch (_repeatMode) {
@@ -1431,6 +1495,7 @@ class PlayerProvider extends ChangeNotifier {
   @override
   void dispose() {
     _sleepTimer?.cancel();
+    _sleepTimerFadeTimer?.cancel();
     _castService.removeListener(_onCastStateChanged);
     _upnpService.removeListener(_onUpnpStateChanged);
     _audioHandler.customAction('dispose');

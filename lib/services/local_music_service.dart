@@ -88,16 +88,28 @@ class LocalMusicService extends ChangeNotifier {
 
     try {
       _prefs = await SharedPreferences.getInstance();
+    } catch (e) {
+      debugPrint('LocalMusicService: failed to get SharedPreferences: $e');
+    }
 
+    try {
       final appDir = await getApplicationDocumentsDirectory();
       _artCacheDir = '${appDir.path}/art_cache';
       await Directory(_artCacheDir!).create(recursive: true);
-
-      await _loadCachedLibrary();
-      _isInitialized = true;
     } catch (e) {
-      debugPrint('Error initializing LocalMusicService: $e');
+      debugPrint(
+        'LocalMusicService: could not create art_cache directory (falling back to in-memory only): $e',
+      );
+      _artCacheDir = null;
     }
+
+    try {
+      await _loadCachedLibrary();
+    } catch (e) {
+      debugPrint('LocalMusicService: failed to load cached library: $e');
+    }
+
+    _isInitialized = true;
   }
 
   Future<bool> requestPermission() async {

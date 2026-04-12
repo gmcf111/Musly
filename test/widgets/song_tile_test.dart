@@ -6,6 +6,7 @@ import 'package:musly/providers/player_provider.dart';
 import 'package:musly/services/subsonic_service.dart';
 import 'package:musly/services/storage_service.dart';
 import 'package:musly/services/upnp_service.dart';
+import 'package:musly/services/audio_handler.dart';
 import 'package:musly/widgets/song_tile.dart';
 import '../test_helpers.dart';
 
@@ -22,6 +23,7 @@ void main() {
         StorageService(),
         FakeCastService(),
         UpnpService(),
+        MuslyAudioHandler(),
       );
     });
 

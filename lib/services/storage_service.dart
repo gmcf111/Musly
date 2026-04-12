@@ -4,6 +4,7 @@ import '../models/server_config.dart';
 
 class StorageService {
   static const String _serverConfigKey = 'server_config';
+  static const String _serverProfilesKey = 'server_profiles';
   static const String _lastPlayedKey = 'last_played';
   static const String _queueKey = 'queue';
   static const String _queueIndexKey = 'queue_index';
@@ -30,6 +31,45 @@ class StorageService {
   Future<void> clearServerConfig() async {
     final prefs = await _prefs;
     await prefs.remove(_serverConfigKey);
+  }
+
+  Future<List<ServerConfig>> getSavedProfiles() async {
+    final prefs = await _prefs;
+    final json = prefs.getString(_serverProfilesKey);
+    if (json == null) return [];
+    final list = jsonDecode(json) as List<dynamic>;
+    return list
+        .map((e) => ServerConfig.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveProfile(ServerConfig config) async {
+    final profiles = await getSavedProfiles();
+    final idx = profiles.indexWhere(
+      (p) => p.serverUrl == config.serverUrl && p.username == config.username,
+    );
+    if (idx >= 0) {
+      profiles[idx] = config;
+    } else {
+      profiles.add(config);
+    }
+    final prefs = await _prefs;
+    await prefs.setString(
+      _serverProfilesKey,
+      jsonEncode(profiles.map((p) => p.toJson()).toList()),
+    );
+  }
+
+  Future<void> deleteProfile(ServerConfig config) async {
+    final profiles = await getSavedProfiles();
+    profiles.removeWhere(
+      (p) => p.serverUrl == config.serverUrl && p.username == config.username,
+    );
+    final prefs = await _prefs;
+    await prefs.setString(
+      _serverProfilesKey,
+      jsonEncode(profiles.map((p) => p.toJson()).toList()),
+    );
   }
 
   Future<void> saveLastPlayed(String songId) async {

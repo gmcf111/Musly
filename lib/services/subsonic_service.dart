@@ -127,6 +127,8 @@ class SubsonicService {
           }
 
           final client = HttpClient(context: context);
+          client.connectionTimeout = const Duration(seconds: 15);
+          client.idleTimeout = const Duration(seconds: 15);
           if (allowSelfSigned) {
             
             client.badCertificateCallback = (cert, host, port) => true;
@@ -136,6 +138,8 @@ class SubsonicService {
           debugPrint('Failed to configure TLS: $e');
           
           final client = HttpClient();
+          client.connectionTimeout = const Duration(seconds: 15);
+          client.idleTimeout = const Duration(seconds: 15);
           if (allowSelfSigned) {
             client.badCertificateCallback = (cert, host, port) => true;
           }

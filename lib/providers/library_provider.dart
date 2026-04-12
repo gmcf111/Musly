@@ -285,30 +285,23 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<void> _refreshAllDataInBackground() async {
     try {
-      final allArtists = await _subsonicService.getArtists();
+      const pageSize = 500;
+      int offset = 0;
       final List<Album> allAlbums = [];
-      final List<Song> allSongs = [];
 
-      for (final artist in allArtists) {
-        try {
-          final albums = await _subsonicService.getArtistAlbums(artist.id);
-          allAlbums.addAll(albums);
-
-          for (final album in albums) {
-            try {
-              final songs = await _subsonicService.getAlbumSongs(album.id);
-              allSongs.addAll(songs);
-            } catch (e) {
-              debugPrint('Error loading album: $e');
-            }
-          }
-        } catch (e) {
-          debugPrint('Error loading artist: $e');
-        }
+      while (true) {
+        final page = await _subsonicService.getAlbumList(
+          type: 'alphabeticalByName',
+          size: pageSize,
+          offset: offset,
+        );
+        allAlbums.addAll(page);
+        if (page.length < pageSize) break;
+        offset += pageSize;
       }
 
       _cachedAllAlbums = allAlbums;
-      _cachedAllSongs = allSongs;
+      _cachedAllSongs = [];
       _lastCacheUpdate = DateTime.now();
 
       await _saveCachedData();

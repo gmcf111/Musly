@@ -133,6 +133,7 @@ class AuthProvider extends ChangeNotifier {
     String? customCertificatePath,
     String? clientCertificatePath,
     String? clientCertificatePassword,
+    String? profileName,
   }) async {
     debugPrint('[Auth] login: user=$username server=$serverUrl legacy=$useLegacyAuth selfSigned=$allowSelfSignedCertificates');
     _state = AuthState.authenticating;
@@ -148,6 +149,7 @@ class AuthProvider extends ChangeNotifier {
       customCertificatePath: customCertificatePath,
       clientCertificatePath: clientCertificatePath,
       clientCertificatePassword: clientCertificatePassword,
+      name: profileName,
     );
 
     _subsonicService.configure(config);
@@ -166,6 +168,10 @@ class AuthProvider extends ChangeNotifier {
         _state = AuthState.authenticated;
         notifyListeners();
         
+        _storageService.saveProfile(updatedConfig).catchError(
+          (e) => debugPrint('Error saving profile: $e'),
+        );
+
         final offlineService = OfflineService();
         await offlineService.initialize();
         offlineService
@@ -244,6 +250,19 @@ class AuthProvider extends ChangeNotifier {
   }
 
   bool get isLocalOnlyMode => _config?.serverType == 'local';
+
+  Future<List<ServerConfig>> getSavedProfiles() =>
+      _storageService.getSavedProfiles();
+
+  Future<void> deleteProfile(ServerConfig profile) =>
+      _storageService.deleteProfile(profile);
+
+  Future<void> switchProfile(ServerConfig profile) async {
+    _config = profile;
+    await _storageService.saveServerConfig(profile);
+    _subsonicService.configure(profile);
+    await _verifyConnection();
+  }
 
   Future<void> updateSelectedMusicFolderIds(List<String> ids) async {
     if (_config == null) return;

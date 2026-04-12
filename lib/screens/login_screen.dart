@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../l10n/app_localizations.dart';
+import '../models/server_config.dart';
 import '../providers/auth_provider.dart';
 import '../services/local_music_service.dart';
 import '../theme/app_theme.dart';
@@ -40,6 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _showAdvancedOptions = false;
   String? _customCertificatePath;
   String? _customCertificateName;
+  final _profileNameController = TextEditingController();
   
   String? _clientCertificatePath;
   String? _clientCertificateName;
@@ -58,6 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _serverController.addListener(_clearError);
     _usernameController.addListener(_clearError);
     _passwordController.addListener(_clearError);
+    _profileNameController.addListener(_clearError);
   }
 
   void _clearError() {
@@ -240,9 +243,11 @@ class _LoginScreenState extends State<LoginScreen> {
     _serverController.removeListener(_clearError);
     _usernameController.removeListener(_clearError);
     _passwordController.removeListener(_clearError);
+    _profileNameController.removeListener(_clearError);
     _serverController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _profileNameController.dispose();
     _clientCertPasswordController.dispose();
     _serverFocusNode.dispose();
     _usernameFocusNode.dispose();
@@ -324,6 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final profileName = _profileNameController.text.trim();
     final success = await authProvider.login(
       serverUrl: serverUrl,
       username: _usernameController.text.trim(),
@@ -335,6 +341,7 @@ class _LoginScreenState extends State<LoginScreen> {
       clientCertificatePassword: _clientCertPasswordController.text.isEmpty
           ? null
           : _clientCertPasswordController.text,
+      profileName: profileName.isEmpty ? null : profileName,
     );
 
     if (!success && mounted) {
@@ -501,7 +508,32 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: AppTheme.lightSecondaryText,
                     ),
                   ),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 24),
+
+                  _SavedProfilesSwitcher(
+                    onProfileSelected: (profile) async {
+                      final authProvider = Provider.of<AuthProvider>(
+                        context,
+                        listen: false,
+                      );
+                      await authProvider.switchProfile(profile);
+                      if (mounted && authProvider.error != null) {
+                        setState(
+                          () => _loginError = authProvider.error,
+                        );
+                      }
+                    },
+                    onProfileDeleted: (profile) async {
+                      final authProvider = Provider.of<AuthProvider>(
+                        context,
+                        listen: false,
+                      );
+                      await authProvider.deleteProfile(profile);
+                      setState(() {});
+                    },
+                  ),
+
+                  const SizedBox(height: 24),
 
                   TextFormField(
                     controller: _serverController,
@@ -677,6 +709,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
 
                   if (_showAdvancedOptions) ...[
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _profileNameController,
+                      autocorrect: false,
+                      decoration: InputDecoration(
+                        labelText: 'Profile Name (optional)',
+                        hintText: 'e.g. Home, Work, VPN',
+                        prefixIcon: const Icon(CupertinoIcons.tag),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -998,6 +1043,105 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SavedProfilesSwitcher extends StatefulWidget {
+  final Future<void> Function(ServerConfig) onProfileSelected;
+  final Future<void> Function(ServerConfig) onProfileDeleted;
+
+  const _SavedProfilesSwitcher({
+    required this.onProfileSelected,
+    required this.onProfileDeleted,
+  });
+
+  @override
+  State<_SavedProfilesSwitcher> createState() => _SavedProfilesSwitcherState();
+}
+
+class _SavedProfilesSwitcherState extends State<_SavedProfilesSwitcher> {
+  Future<List<ServerConfig>>? _profilesFuture;
+  bool _loaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loaded) {
+      _loaded = true;
+      _reload();
+    }
+  }
+
+  void _reload() {
+    _profilesFuture = Provider.of<AuthProvider>(
+      context,
+      listen: false,
+    ).getSavedProfiles();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<ServerConfig>>(
+      future: _profilesFuture,
+      builder: (context, snap) {
+        final profiles = snap.data ?? [];
+        if (profiles.isEmpty) return const SizedBox.shrink();
+
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Saved Profiles',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white54 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: profiles.map((profile) {
+                final label = profile.name?.isNotEmpty == true
+                    ? profile.name!
+                    : '${profile.username}@${Uri.tryParse(profile.serverUrl)?.host ?? profile.serverUrl}';
+                return InputChip(
+                  avatar: const Icon(
+                    CupertinoIcons.person_crop_circle,
+                    size: 18,
+                  ),
+                  label: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  tooltip: '${profile.username} – ${profile.serverUrl}',
+                  onPressed: () async {
+                    await widget.onProfileSelected(profile);
+                    if (mounted) setState(_reload);
+                  },
+                  onDeleted: () async {
+                    await widget.onProfileDeleted(profile);
+                    if (mounted) setState(_reload);
+                  },
+                  deleteIcon: const Icon(CupertinoIcons.xmark_circle, size: 16),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap a profile to connect • tap × to delete',
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

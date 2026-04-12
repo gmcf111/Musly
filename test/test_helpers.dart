@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:musly/providers/providers.dart';
 import 'package:musly/services/services.dart';
+import 'package:musly/services/audio_handler.dart';
 
 class FakeCastService extends CastService {
   @override
@@ -55,7 +56,7 @@ Widget createTestApp({
       ChangeNotifierProvider<PlayerProvider>(
         create: (_) =>
             playerProvider ??
-            PlayerProvider(service, storage, FakeCastService(), UpnpService()),
+            PlayerProvider(service, storage, FakeCastService(), UpnpService(), MuslyAudioHandler()),
       ),
       ChangeNotifierProvider<LibraryProvider>(
         create: (_) => libraryProvider ?? LibraryProvider(service),

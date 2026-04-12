@@ -12,7 +12,8 @@ class ServerConfig {
   final String?
   clientCertificatePath; 
   final String?
-  clientCertificatePassword; 
+  clientCertificatePassword;
+  final String? name;
 
   ServerConfig({
     required this.serverUrl,
@@ -26,6 +27,7 @@ class ServerConfig {
     this.customCertificatePath,
     this.clientCertificatePath,
     this.clientCertificatePassword,
+    this.name,
   });
 
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
@@ -45,6 +47,7 @@ class ServerConfig {
       customCertificatePath: json['customCertificatePath'],
       clientCertificatePath: json['clientCertificatePath'],
       clientCertificatePassword: json['clientCertificatePassword'],
+      name: json['name'] as String?,
     );
   }
 
@@ -61,6 +64,7 @@ class ServerConfig {
       'customCertificatePath': customCertificatePath,
       'clientCertificatePath': clientCertificatePath,
       'clientCertificatePassword': clientCertificatePassword,
+      'name': name,
     };
   }
 
@@ -76,6 +80,7 @@ class ServerConfig {
     String? customCertificatePath,
     String? clientCertificatePath,
     String? clientCertificatePassword,
+    String? name,
   }) {
     return ServerConfig(
       serverUrl: serverUrl ?? this.serverUrl,
@@ -94,6 +99,7 @@ class ServerConfig {
           clientCertificatePath ?? this.clientCertificatePath,
       clientCertificatePassword:
           clientCertificatePassword ?? this.clientCertificatePassword,
+      name: name ?? this.name,
     );
   }
 
