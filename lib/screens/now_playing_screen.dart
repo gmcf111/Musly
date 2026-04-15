@@ -2598,6 +2598,12 @@ class _VolumeSliderState extends State<_VolumeSlider> {
   double _systemVolume = 0.5;
   StreamSubscription<double>? _volumeSubscription;
 
+  // Serialise remote volume commits: store the latest desired value and run
+  // one async write loop at a time so out-of-order responses can't snap the
+  // renderer back to a stale level during a fast drag.
+  double? _pendingRemoteVolume;
+  bool _remoteCommitInProgress = false;
+
   @override
   void initState() {
     super.initState();
@@ -2631,9 +2637,26 @@ class _VolumeSliderState extends State<_VolumeSlider> {
       if (!isRemote) _systemVolume = newVolume;
     });
     if (isRemote) {
-      provider.setVolume(newVolume);
+      // Queue the value and let a single async loop drain the queue so rapid
+      // drag ticks never result in out-of-order writes reaching the renderer.
+      _pendingRemoteVolume = newVolume;
+      _drainRemoteVolume(provider);
     } else {
       VolumeController.instance.setVolume(newVolume);
+    }
+  }
+
+  Future<void> _drainRemoteVolume(PlayerProvider provider) async {
+    if (_remoteCommitInProgress) return;
+    _remoteCommitInProgress = true;
+    try {
+      while (_pendingRemoteVolume != null) {
+        final value = _pendingRemoteVolume!;
+        _pendingRemoteVolume = null;
+        await provider.setVolume(value);
+      }
+    } finally {
+      _remoteCommitInProgress = false;
     }
   }
 

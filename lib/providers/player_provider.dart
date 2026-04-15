@@ -56,6 +56,11 @@ class PlayerProvider extends ChangeNotifier {
   Song? _currentSong;
   double _volume = 1.0;
 
+  /// True only while audio is actually being rendered on a remote device.
+  /// Distinct from isConnected: if the user plays a radio station while a
+  /// UPnP renderer is connected, the audio is still local, so this stays false.
+  bool _isRenderingRemotely = false;
+
   String? _resolvedArtworkUrl;
 
   RadioStation? _currentRadioStation;
@@ -684,7 +689,7 @@ class PlayerProvider extends ChangeNotifier {
   /// than locally.  Used to suppress audio-focus and noisy-event handling that
   /// would incorrectly pause the remote device, and to route UI volume changes
   /// to the renderer instead of the Android system volume.
-  bool get isRemotePlayback => _upnpService.isConnected || _castService.isConnected;
+  bool get isRemotePlayback => _isRenderingRemotely;
   bool get shuffleEnabled => _shuffleEnabled;
   RepeatMode get repeatMode => _repeatMode;
   Duration get position => _position;
@@ -703,6 +708,13 @@ class PlayerProvider extends ChangeNotifier {
   // bar animates correctly regardless of which playback path is active.
   final _positionController = StreamController<Duration>.broadcast();
   Stream<Duration> get positionStream => _positionController.stream;
+
+  // Subscriptions stored so they can be cancelled before dispose closes the
+  // StreamController, preventing a late just_audio tick from calling add() on
+  // a closed controller.
+  StreamSubscription<PlayerState>? _playerStateSub;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<Duration?>? _durationSub;
 
   double get progress {
     if (_duration.inMilliseconds == 0) return 0;
@@ -796,11 +808,11 @@ class PlayerProvider extends ChangeNotifier {
       notifyListeners();
     });
 
-    _audioPlayer.playerStateStream.listen(
+    _playerStateSub = _audioPlayer.playerStateStream.listen(
       (state) {
         // In remote-playback mode the local player is stopped/paused; ignore
         // its state so it doesn't overwrite the UPnP/Cast-managed values.
-        if (_upnpService.isConnected || _castService.isConnected) return;
+        if (_isRenderingRemotely) return;
 
         final wasPlaying = _isPlaying;
         _isPlaying = state.playing;
@@ -831,11 +843,11 @@ class PlayerProvider extends ChangeNotifier {
 
     Duration? lastNotified;
     Duration? lastSystemUpdate;
-    _audioPlayer.positionStream.listen(
+    _positionSub = _audioPlayer.positionStream.listen(
       (position) {
         // In remote-playback mode the local player sits idle at position zero;
         // ignore its ticks so they don't overwrite the UPnP/Cast position.
-        if (_upnpService.isConnected || _castService.isConnected) return;
+        if (_isRenderingRemotely) return;
 
         final positionJumpedBack =
             _position.inMilliseconds > 0 &&
@@ -863,11 +875,11 @@ class PlayerProvider extends ChangeNotifier {
       },
     );
 
-    _audioPlayer.durationStream.listen(
+    _durationSub = _audioPlayer.durationStream.listen(
       (duration) {
         // In remote-playback mode the local player has no loaded track; ignore
         // its duration so it doesn't zero out the UPnP/Cast duration.
-        if (_upnpService.isConnected || _castService.isConnected) return;
+        if (_isRenderingRemotely) return;
 
         _duration = duration ?? Duration.zero;
         notifyListeners();
@@ -994,6 +1006,7 @@ class PlayerProvider extends ChangeNotifier {
               : null,
           autoPlay: true,
         );
+        _isRenderingRemotely = true;
         _isPlaying = true;
       } else if (_upnpService.isConnected) {
         // Reset before sending Stop so a poll that fires mid-load can't
@@ -1035,9 +1048,10 @@ class PlayerProvider extends ChangeNotifier {
           debugPrint('UPnP playback failed, disconnected: $e');
           rethrow;
         }
+        _isRenderingRemotely = true;
         _isPlaying = true;
       } else {
-        
+        _isRenderingRemotely = false;
         final String playUrl;
         if (song.isLocal == true && song.path != null) {
           playUrl = Uri.file(song.path!).toString();
@@ -1115,6 +1129,7 @@ class PlayerProvider extends ChangeNotifier {
       _queue = [];
       _currentIndex = -1;
       _isPlayingRadio = true;
+      _isRenderingRemotely = false; // radio always plays locally
       _currentRadioStation = station;
       _position = Duration.zero;
       _duration = Duration.zero;
@@ -1545,6 +1560,9 @@ class PlayerProvider extends ChangeNotifier {
     _samsungService.dispose();
     
     _discordRpcService.shutdown();
+    _playerStateSub?.cancel();
+    _positionSub?.cancel();
+    _durationSub?.cancel();
     _positionController.close();
     super.dispose();
   }
@@ -1624,7 +1642,7 @@ class PlayerProvider extends ChangeNotifier {
         playSong(song);
       }
     } else {
-      
+      _isRenderingRemotely = false;
       _androidSystemService.setRemotePlayback(isRemote: false);
       _isPlaying = false;
       notifyListeners();
@@ -1661,6 +1679,7 @@ class PlayerProvider extends ChangeNotifier {
     if (!connected && _upnpWasConnected) {
       _upnpWasConnected = false;
       _upnpWasPlaying = false;
+      _isRenderingRemotely = false;
       _isPlaying = false;
       _position = Duration.zero;
       _duration = Duration.zero;

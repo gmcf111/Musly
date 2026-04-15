@@ -299,6 +299,7 @@ class UpnpService extends ChangeNotifier {
         // getPlaybackState() caught an exception internally and returned null.
         // Count consecutive failures so callers can detect a dead renderer.
         _consecutivePollErrors++;
+        notifyListeners();
         if (_consecutivePollErrors == 1 || _consecutivePollErrors % 5 == 0) {
           debugPrint(
             'UPnP: poll failed $_consecutivePollErrors time(s) in a row '
@@ -308,7 +309,10 @@ class UpnpService extends ChangeNotifier {
         return;
       }
 
-      _consecutivePollErrors = 0;
+      if (_consecutivePollErrors != 0) {
+        _consecutivePollErrors = 0;
+        notifyListeners();
+      }
 
       bool changed = false;
       if (state.transportState != _rendererState) {
@@ -337,6 +341,7 @@ class UpnpService extends ChangeNotifier {
       }
     } catch (e) {
       _consecutivePollErrors++;
+      notifyListeners();
       debugPrint('UPnP: poll error: $e');
     } finally {
       _isPolling = false;
